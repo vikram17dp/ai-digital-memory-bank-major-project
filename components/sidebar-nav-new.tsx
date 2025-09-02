@@ -112,10 +112,11 @@ export function SidebarNav({ activeSection, onSectionChange, isOpen, onClose, cl
   return (
     <>
       {/* Desktop Sidebar */}
-      <div className={cn(
-        "hidden md:flex w-64 flex-col border-r border-gray-700/30 bg-gray-900/95 backdrop-blur-xl h-[calc(100vh-4rem)] overflow-hidden",
-        className
-      )}>
+   <div className={cn(
+  "hidden md:flex w-64 flex-col border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 backdrop-blur-xl h-[calc(100vh-4rem)] overflow-hidden",
+  className
+)}>
+
         {/* User Profile Section */}
         <div className="p-4 border-b border-gray-700/30 flex-shrink-0">
           <div className="flex items-center gap-3">

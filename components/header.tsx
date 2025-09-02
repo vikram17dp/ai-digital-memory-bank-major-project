@@ -14,7 +14,9 @@ interface HeaderProps {
 
 export function Header({ onMenuToggle }: HeaderProps) {
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-gradient-to-r from-gray-900 via-black to-gray-900 backdrop-blur-2xl">
+<header className="sticky top-0 z-50 w-full border-b border-gray-200 dark:border-white/10 
+  bg-white dark:bg-gradient-to-r dark:from-gray-900 dark:via-black dark:to-gray-900 backdrop-blur-2xl">
+
       {/* Animated background pattern */}
       <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 via-cyan-500/5 to-teal-500/10 animate-pulse" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-cyan-500/5 via-transparent to-transparent" />
