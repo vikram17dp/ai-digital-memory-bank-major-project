@@ -1,14 +1,58 @@
-
 // app/api/chat/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@clerk/nextjs/server';
 
-const SARVAM_API_KEY = process.env.SARVAM_API_KEY_1 || process.env.SARVAM_API_KEY_2 || process.env.SARVAM_API_KEY_3;
+// API Key cycling configuration
+const API_KEYS = [
+  process.env.SARVAM_API_KEY_1,
+  process.env.SARVAM_API_KEY_2,
+  process.env.SARVAM_API_KEY_3,
+].filter(Boolean); // Remove undefined/null keys
+
 const SARVAM_API_URL = 'https://api.sarvam.ai/v1/chat/completions';
 
-if (!SARVAM_API_KEY) {
-  throw new Error('Please define the SARVAM_API_KEY environment variable in .env.local');
+if (API_KEYS.length === 0) {
+  throw new Error('Please define at least one SARVAM_API_KEY environment variable in .env.local');
+}
+
+// Cycle queue class for managing API key rotation
+class ApiKeyCycleQueue {
+  private keys: string[];
+  private currentIndex: number = 0;
+  private errorCount: number = 0;
+  private maxRetries: number = 3;
+
+  constructor(keys: string[]) {
+    this.keys = keys;
+  }
+
+  getCurrentKey(): string {
+    return this.keys[this.currentIndex];
+  }
+
+  switchToNext(): void {
+    this.currentIndex = (this.currentIndex + 1) % this.keys.length;
+    this.errorCount++;
+    console.log(`Switched to API key index: ${this.currentIndex}, Error count: ${this.errorCount}`);
+  }
+
+  hasRetriesLeft(): boolean {
+    return this.errorCount < this.maxRetries;
+  }
+
+  reset(): void {
+    this.currentIndex = 0;
+    this.errorCount = 0;
+  }
+
+  getStatus(): { currentIndex: number; errorCount: number; totalKeys: number } {
+    return {
+      currentIndex: this.currentIndex,
+      errorCount: this.errorCount,
+      totalKeys: this.keys.length,
+    };
+  }
 }
 
 interface Memory {
@@ -24,6 +68,67 @@ interface CreateMemoryAction {
   content: string;
   tags: string[];
   mood: 'positive' | 'neutral' | 'negative';
+}
+
+async function makeApiRequest(
+  apiKeyCycle: ApiKeyCycleQueue,
+  systemPrompt: string,
+  message: string
+): Promise<any> {
+  while (apiKeyCycle.hasRetriesLeft()) {
+    const currentKey = apiKeyCycle.getCurrentKey();
+    console.log(`Attempting API call with key index: ${apiKeyCycle.getStatus().currentIndex}`);
+
+    try {
+      const response = await fetch(SARVAM_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'api-subscription-key': currentKey,
+        },
+        body: JSON.stringify({
+          model: 'sarvam-m',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: message },
+          ],
+          temperature: 0.7,
+          max_tokens: 1000,
+          stream: false,
+        }),
+      });
+
+      if (response.ok) {
+        // Reset cycle on successful request
+        apiKeyCycle.reset();
+        return await response.json();
+      }
+
+      // Log the error and try next key
+      const errorText = await response.text();
+      console.error(`API error with key ${apiKeyCycle.getStatus().currentIndex}: ${response.status} - ${errorText}`);
+      
+      // Switch to next key if we have retries left
+      if (apiKeyCycle.hasRetriesLeft()) {
+        apiKeyCycle.switchToNext();
+        continue;
+      } else {
+        throw new Error(`All API keys failed. Last error: ${response.status} - ${errorText}`);
+      }
+    } catch (networkError) {
+      console.error(`Network error with key ${apiKeyCycle.getStatus().currentIndex}:`, networkError);
+      
+      // Switch to next key if we have retries left
+      if (apiKeyCycle.hasRetriesLeft()) {
+        apiKeyCycle.switchToNext();
+        continue;
+      } else {
+        throw networkError;
+      }
+    }
+  }
+
+  throw new Error('Exhausted all retry attempts with all API keys');
 }
 
 export async function POST(request: NextRequest) {
@@ -75,35 +180,25 @@ Be empathetic, positive, and concise. If no memories, suggest creating one. End 
 
 Context: ${JSON.stringify(memories)}`;
 
-    // Make Sarvam API request
-    const sarvamResponse = await fetch(SARVAM_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'api-subscription-key': SARVAM_API_KEY,
-      },
-      body: JSON.stringify({
-        model: 'sarvam-m', // Updated model based on API error
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: message },
-        ],
-        temperature: 0.7,
-        max_tokens: 1000,
-        stream: false,
-      }),
-    });
+    // Initialize API key cycle queue
+    const apiKeyCycle = new ApiKeyCycleQueue(API_KEYS);
 
-    if (!sarvamResponse.ok) {
-      const errorText = await sarvamResponse.text();
-      console.error(`Sarvam API error: ${sarvamResponse.status} - ${errorText}`);
+    // Make API request with cycling
+    let sarvamData;
+    try {
+      sarvamData = await makeApiRequest(apiKeyCycle, systemPrompt, message);
+    } catch (error) {
+      console.error('All API keys failed:', error);
       const fallbackResponse = memories.length > 0
-        ? `I found ${memories.length} memories in your bank, but I'm having trouble connecting to the AI service. Please try again later.`
-        : `Welcome to Memory Bank! I'm Memo, your AI memory assistant. I'm currently unable to connect to my AI service, but please try again soon!`;
-      return NextResponse.json({ message: fallbackResponse, action: 'chat_response' }, { status: 200 });
+        ? `I found ${memories.length} memories in your bank, but I'm having trouble connecting to the AI service. All backup services are also unavailable. Please try again later.`
+        : `Welcome to Memory Bank! I'm Memo, your AI memory assistant. I'm currently unable to connect to any of my AI services, but please try again soon!`;
+      return NextResponse.json({ 
+        message: fallbackResponse, 
+        action: 'chat_response',
+        error: 'All API services unavailable'
+      }, { status: 200 });
     }
 
-    const sarvamData = await sarvamResponse.json();
     const aiResponse = sarvamData.choices?.[0]?.message?.content;
 
     if (!aiResponse) {
@@ -149,5 +244,3 @@ Context: ${JSON.stringify(memories)}`;
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
-
-
