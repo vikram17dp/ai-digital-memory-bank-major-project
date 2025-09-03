@@ -964,3 +964,144 @@ body {
   height: calc(100vh - 4rem);
   overflow: hidden;
 }
+
+/* Smooth Scrolling Enhancements */
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 2rem; /* Offset for fixed headers */
+}
+
+* {
+  scroll-behavior: smooth;
+}
+
+/* Enhanced smooth scrolling for all browsers */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  * {
+    scroll-behavior: smooth;
+  }
+  
+  /* Optimize scrolling performance */
+  .scroll-container {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch; /* iOS momentum scrolling */
+    overscroll-behavior: contain; /* Prevent scroll chaining */
+  }
+  
+  /* Memory form specific smooth scrolling */
+  .memory-form-container {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    scroll-padding-top: 1rem;
+    will-change: scroll-position; /* Optimize for scrolling */
+  }
+  
+  /* Step transitions with smooth scrolling */
+  .step-content {
+    scroll-behavior: smooth;
+    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+  }
+}
+
+/* Faster scrolling for touch devices */
+@media (hover: none) and (pointer: coarse) {
+  html, * {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .scroll-container,
+  .memory-form-container {
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: y proximity;
+  }
+}
+
+/* Reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  
+  * {
+    scroll-behavior: auto;
+  }
+  
+  .step-content {
+    transition: none;
+  }
+}
+
+/* Custom smooth scroll utilities */
+.scroll-smooth {
+  scroll-behavior: smooth !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+.scroll-auto {
+  scroll-behavior: auto !important;
+}
+
+/* Optimize rendering for smooth scrolling */
+.smooth-scroll-optimized {
+  will-change: scroll-position;
+  transform: translateZ(0); /* Force hardware acceleration */
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  -webkit-perspective: 1000;
+  perspective: 1000;
+}
+
+/* Enhanced scrollbar with smooth interactions */
+.smooth-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+  transition: all 0.2s ease;
+}
+
+.smooth-scrollbar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.1);
+  border-radius: 8px;
+  transition: background 0.2s ease;
+}
+
+.smooth-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.6), rgba(34, 197, 94, 0.6));
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.smooth-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.8), rgba(34, 197, 94, 0.8));
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
+}
+
+/* Smooth fade animations for content changes */
+.fade-transition {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.fade-enter {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.fade-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.fade-exit {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.fade-exit-active {
+  opacity: 0;
+  transform: translateY(-10px);
+}

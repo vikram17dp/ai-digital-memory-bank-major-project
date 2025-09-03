@@ -1,0 +1,40 @@
+{
+  "cause": "In Next.js 13+ App Router, headers() is an async dynamic API that returns a Promise. The error occurs because you're trying to call .get() on a Promise instead of the resolved headers object. Next.js requires awaiting dynamic APIs like headers(), cookies(), and searchParams() to ensure proper server-side rendering, prevent hydration mismatches, and handle the asynchronous nature of request processing.",
+  
+  "solution": {
+    "server_component": "// app/dashboard/page.tsx\nexport default async function DashboardPage() {\n  // ✅ Correct: Await headers() first\n  const headersList = await headers();\n  const csp = headersList.get('Content-Security-Policy');\n  \n  return (\n    <div>\n      <h1>Dashboard</h1>\n      {csp ? (\n        <div>\n          <p>Content Security Policy:</p>\n          <code>{csp}</code>\n        </div>\n      ) : (\n        <p>No CSP header found</p>\n      )}\n    </div>\n  );\n}",
+    
+    "api_route": "// app/api/dashboard/route.ts\nimport { headers } from 'next/headers';\n\nexport async function GET() {\n  try {\n    // ✅ Correct: Await headers() first\n    const headersList = await headers();\n    const csp = headersList.get('Content-Security-Policy');\n    const userAgent = headersList.get('User-Agent');\n    \n    return Response.json({\n      success: true,\n      headers: {\n        csp: csp || null,\n        userAgent: userAgent || null\n      }\n    });\n  } catch (error) {\n    return Response.json(\n      { error: 'Failed to retrieve headers' },\n      { status: 500 }\n    );\n  }\n}",
+    
+    "middleware": "// middleware.ts\nimport { NextRequest, NextResponse } from 'next/server';\n\nexport function middleware(request: NextRequest) {\n  // ✅ In middleware, you can access headers directly\n  const csp = request.headers.get('Content-Security-Policy');\n  \n  const response = NextResponse.next();\n  \n  // Set CSP if not present\n  if (!csp) {\n    response.headers.set(\n      'Content-Security-Policy',\n      \"default-src 'self'; script-src 'self' 'unsafe-eval';\"\n    );\n  }\n  \n  return response;\n}\n\nexport const config = {\n  matcher: '/dashboard/:path*'\n};",
+    
+    "error_example": "// ❌ WRONG - This causes the error\nexport default function DashboardPage() {\n  // This will throw the error you're seeing\n  const csp = headers().get('Content-Security-Policy');\n  return <div>{csp}</div>;\n}\n\n// ✅ CORRECT - Fixed version\nexport default async function DashboardPage() {\n  const headersList = await headers();\n  const csp = headersList.get('Content-Security-Policy');\n  return <div>{csp}</div>;\n}"
+  },
+  
+  "notes": [
+    "Always import headers from 'next/headers': import { headers } from 'next/headers'",
+    "Mark your component/function as 'async' when using await with headers()",
+    "headers() only works in Server Components, API Routes, and Route Handlers - NOT in Client Components",
+    "The headers() function provides READ-ONLY access to incoming request headers",
+    "If you need headers in multiple places, pass the awaited headers object as props",
+    "Other dynamic APIs (cookies(), searchParams()) also require awaiting in Next.js 13+",
+    "This async requirement was introduced for better performance and SSR consistency",
+    "In middleware.ts, use request.headers.get() directly (no await needed)",
+    "Always handle potential null values when getting headers",
+    "This error appears at build time or runtime depending on the route access pattern"
+  ],
+  
+  "best_practices": {
+    "typescript_types": "// Type-safe header access\nimport { headers } from 'next/headers';\n\ntype HeaderName = 'Content-Security-Policy' | 'User-Agent' | 'Authorization';\n\nasync function getHeader(name: HeaderName): Promise<string | null> {\n  const headersList = await headers();\n  return headersList.get(name);\n}",
+    
+    "reusable_hook": "// Custom hook for server components\nasync function useServerHeaders() {\n  const headersList = await headers();\n  \n  return {\n    csp: headersList.get('Content-Security-Policy'),\n    userAgent: headersList.get('User-Agent'),\n    authorization: headersList.get('Authorization'),\n    all: headersList\n  };\n}",
+    
+    "error_handling": "// Robust error handling\nexport default async function DashboardPage() {\n  try {\n    const headersList = await headers();\n    const csp = headersList.get('Content-Security-Policy');\n    \n    return (\n      <div>\n        <h1>Dashboard</h1>\n        <p>CSP: {csp || 'Not set'}</p>\n      </div>\n    );\n  } catch (error) {\n    console.error('Failed to get headers:', error);\n    return <div>Error loading dashboard</div>;\n  }\n}"
+  },
+  
+  "migration_guide": {
+    "from": "// Next.js 12 (Pages Router)\nexport async function getServerSideProps(context) {\n  const csp = context.req.headers['content-security-policy'];\n  return { props: { csp } };\n}",
+    
+    "to": "// Next.js 13+ (App Router)\nexport default async function Page() {\n  const headersList = await headers();\n  const csp = headersList.get('Content-Security-Policy');\n  return <div>{csp}</div>;\n}"
+  }
+}

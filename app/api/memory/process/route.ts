@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs';
+import { auth } from '@clerk/nextjs/server'; // ✅ notice /server here
 import { uploadToS3, extractTextFromImage } from '@/lib/aws-s3';
 import { analyzeSentimentHuggingFace, generateContentFromTitle, generateTagsFromContent, expandMemoryContent } from '@/lib/hugging-face';
 import { analyzeSentimentML, processImageML, generateMemoryDataML } from '@/lib/ml-backend';
@@ -7,26 +7,22 @@ import { validateMemoryData, sanitizeInput } from '@/lib/validation';
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId } = auth();
-    
+    // Await the auth() call
+    const { userId } = await auth(); // ✅ use await
+
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const formData = await req.formData();
     const mode = formData.get('mode') as string; // 'manual', 'minimal', 'image'
-    
+
     // Extract form data
-    let title = formData.get('title') as string || '';
-    let content = formData.get('content') as string || '';
-    let mood = formData.get('mood') as string || '';
+    let title = sanitizeInput(formData.get('title') as string || '');
+    let content = sanitizeInput(formData.get('content') as string || '');
+    let mood = sanitizeInput(formData.get('mood') as string || '');
     let tags = JSON.parse(formData.get('tags') as string || '[]');
     let images = formData.getAll('images') as File[];
-    
-    // Sanitize inputs
-    title = sanitizeInput(title);
-    content = sanitizeInput(content);
-    mood = sanitizeInput(mood);
 
     let result: any = {
       title: '',
@@ -41,18 +37,16 @@ export async function POST(req: NextRequest) {
 
     switch (mode) {
       case 'manual':
-        // Mode 1: Manual Entry - Save as-is but enhance with sentiment analysis
         result.title = title;
         result.content = content;
         result.tags = tags;
-        
-        // Run parallel sentiment analysis
+
+        // Parallel sentiment analysis
         const [hfSentiment, mlSentiment] = await Promise.all([
           analyzeSentimentHuggingFace(content),
           analyzeSentimentML(content)
         ]);
-        
-        // Combine sentiment results (using ML as primary, HF as fallback)
+
         result.mood = {
           label: mlSentiment.label || hfSentiment.label || 'Neutral',
           score: Math.max(mlSentiment.score || 0, hfSentiment.score || 0.5)
@@ -60,9 +54,7 @@ export async function POST(req: NextRequest) {
         break;
 
       case 'minimal':
-        // Mode 2: Minimal Input - AI expansion
         if (title && !content) {
-          // Title provided -> expand to full content
           const [expandedContent, generatedTags, sentimentData] = await Promise.all([
             expandMemoryContent(title),
             generateTagsFromContent(title),
@@ -71,7 +63,7 @@ export async function POST(req: NextRequest) {
               analyzeSentimentML(title)
             ])
           ]);
-          
+
           result.title = title;
           result.content = expandedContent;
           result.tags = generatedTags;
@@ -80,13 +72,12 @@ export async function POST(req: NextRequest) {
             score: Math.max(sentimentData[1].score || 0, sentimentData[0].score || 0.5)
           };
         } else if (mood && !title && !content) {
-          // Mood provided -> suggest titles and content
           const memoryData = await generateMemoryDataML(mood);
           const [hfSentiment, mlSentiment] = await Promise.all([
             analyzeSentimentHuggingFace(memoryData.content),
             analyzeSentimentML(memoryData.content)
           ]);
-          
+
           result.title = memoryData.title;
           result.content = memoryData.content;
           result.tags = memoryData.tags;
@@ -98,24 +89,18 @@ export async function POST(req: NextRequest) {
         break;
 
       case 'image':
-        // Mode 3: Image Upload - OCR + AI processing
         if (images.length > 0) {
           const processedImages = [];
-          
           for (const image of images) {
-            // Upload to S3
             const imageUrl = await uploadToS3(image, userId);
             processedImages.push(imageUrl);
-            
-            // Extract text using OCR
+
             const extractedText = await extractTextFromImage(image);
-            
             if (extractedText) {
               content += extractedText + ' ';
             }
           }
-          
-          // Process extracted text with ML backend
+
           if (content.trim()) {
             const [mlProcessedData, hfSentiment, mlSentiment, generatedTags] = await Promise.all([
               processImageML(content.trim()),
@@ -123,7 +108,7 @@ export async function POST(req: NextRequest) {
               analyzeSentimentML(content.trim()),
               generateTagsFromContent(content.trim())
             ]);
-            
+
             result.title = mlProcessedData.suggestedTitle || 'Untitled Memory';
             result.content = content.trim();
             result.tags = [...new Set([...generatedTags, ...mlProcessedData.suggestedTags])];
@@ -131,7 +116,7 @@ export async function POST(req: NextRequest) {
               label: mlSentiment.label || hfSentiment.label || 'Neutral',
               score: Math.max(mlSentiment.score || 0, hfSentiment.score || 0.5)
             };
-            result.imageUrl = processedImages[0]; // Use first image as primary
+            result.imageUrl = processedImages[0];
           }
         }
         break;
@@ -140,7 +125,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Invalid processing mode' }, { status: 400 });
     }
 
-    // Validate final result
     const validationResult = validateMemoryData(result);
     if (!validationResult.isValid) {
       return NextResponse.json({ 
