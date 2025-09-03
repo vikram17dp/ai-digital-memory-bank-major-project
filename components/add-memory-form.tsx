@@ -152,12 +152,72 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
   const handleSubmit = async () => {
     setIsSubmitting(true)
     
-    // Simulate API call
-    setTimeout(() => {
-      console.log('Memory saved:', formData)
+    try {
+      // Prepare form data for AI processing
+      const submitFormData = new FormData()
+      
+      // Determine processing mode based on form data
+      let mode = 'manual' // Default mode
+      if (formData.title && !formData.content) {
+        mode = 'minimal' // Title only - expand content
+      } else if (formData.mood && !formData.title && !formData.content) {
+        mode = 'minimal' // Mood only - generate content
+      } else if (formData.images.length > 0) {
+        mode = 'image' // Image upload mode
+      }
+      
+      submitFormData.append('mode', mode)
+      submitFormData.append('title', formData.title)
+      submitFormData.append('content', formData.content)
+      submitFormData.append('mood', formData.mood)
+      submitFormData.append('tags', JSON.stringify(formData.tags))
+      
+      // Add images
+      formData.images.forEach(image => {
+        submitFormData.append('images', image)
+      })
+      
+      // Process memory with AI/ML backend
+      const response = await fetch('/api/memory/process', {
+        method: 'POST',
+        body: submitFormData
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to process memory')
+      }
+      
+      const processedMemory = await response.json()
+      
+      // Update form with AI-enhanced data (user can still edit before final save)
+      setFormData(prev => ({
+        ...prev,
+        title: processedMemory.title || prev.title,
+        content: processedMemory.content || prev.content,
+        tags: processedMemory.tags || prev.tags,
+        mood: getMoodFromLabel(processedMemory.mood?.label) || prev.mood
+      }))
+      
+      console.log('Memory processed:', processedMemory)
+      
+      // Show success message or redirect
+      // You can add toast notification here
+      
+    } catch (error) {
+      console.error('Error processing memory:', error)
+      // Show error message to user
+    } finally {
       setIsSubmitting(false)
-      // Reset form or navigate away
-    }, 2000)
+    }
+  }
+  
+  const getMoodFromLabel = (label: string) => {
+    const moodMap: { [key: string]: string } = {
+      'Positive': 'happy',
+      'Negative': 'sad', 
+      'Neutral': 'neutral'
+    }
+    return moodMap[label] || ''
   }
 
   const canProceedToNext = () => {

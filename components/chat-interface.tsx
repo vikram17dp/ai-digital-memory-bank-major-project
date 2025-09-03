@@ -1,5 +1,4 @@
 
-// components/ChatInterface.tsx
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
@@ -106,25 +105,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ user }) => {
     },
   ];
 
-  const simulateStreaming = (text: string, messageId: number) => {
-    setStreamingMessageId(messageId);
-    let currentText = '';
-    const words = text.split(' ');
-    let wordIndex = 0;
-
-    const addWord = () => {
-      if (wordIndex < words.length) {
-        currentText += (wordIndex > 0 ? ' ' : '') + words[wordIndex];
-        setMessages((prev) =>
-          prev.map((msg) => (msg.id === messageId ? { ...msg, content: currentText } : msg))
-        );
-        wordIndex++;
-        setTimeout(addWord, 50 + Math.random() * 100);
-      } else {
-        setStreamingMessageId(null);
-      }
-    };
-    addWord();
+  const showFullMessage = (text: string, messageId: number) => {
+    // Show the complete message immediately after a brief delay
+    setTimeout(() => {
+      setMessages((prev) =>
+        prev.map((msg) => (msg.id === messageId ? { ...msg, content: text } : msg))
+      );
+      setStreamingMessageId(null);
+    }, 500); // Brief delay to simulate thinking, then show full response
   };
 
   const handleSend = async () => {
@@ -165,7 +153,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ user }) => {
       };
 
       setMessages((prev) => [...prev, botMessage]);
-      simulateStreaming(data.message, botMessage.id);
+      showFullMessage(data.message, botMessage.id);
     } catch (error) {
       console.error('Error sending message:', error);
       const errorMessage: Message = {
