@@ -1,145 +1,141 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server'; // ✅ notice /server here
+import { auth } from '@clerk/nextjs/server';
 import { uploadToS3, extractTextFromImage } from '@/lib/aws-s3';
 import { analyzeSentimentHuggingFace, generateContentFromTitle, generateTagsFromContent, expandMemoryContent } from '@/lib/hugging-face';
 import { analyzeSentimentML, processImageML, generateMemoryDataML } from '@/lib/ml-backend';
 import { validateMemoryData, sanitizeInput } from '@/lib/validation';
+import { prisma } from '@/lib/prisma';
 
 export async function POST(req: NextRequest) {
   try {
-    // Await the auth() call
-    const { userId } = await auth(); // ✅ use await
+    // Authenticate user
+    const { userId } = await auth();
 
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const formData = await req.formData();
-    const mode = formData.get('mode') as string; // 'manual', 'minimal', 'image'
 
     // Extract form data
-    let title = sanitizeInput(formData.get('title') as string || '');
-    let content = sanitizeInput(formData.get('content') as string || '');
-    let mood = sanitizeInput(formData.get('mood') as string || '');
-    let tags = JSON.parse(formData.get('tags') as string || '[]');
-    let images = formData.getAll('images') as File[];
+    const title = sanitizeInput(formData.get('title') as string || '');
+    const content = sanitizeInput(formData.get('content') as string || '');
+    const mood = sanitizeInput(formData.get('mood') as string || 'neutral');
+    const date = formData.get('date') as string || new Date().toISOString();
+    const location = sanitizeInput(formData.get('location') as string || '');
+    const people = sanitizeInput(formData.get('people') as string || '');
+    const tags = JSON.parse(formData.get('tags') as string || '[]');
+    const isPrivate = formData.get('isPrivate') === 'true';
+    const isFavorite = formData.get('isFavorite') === 'true';
 
-    let result: any = {
-      title: '',
-      content: '',
-      tags: [],
-      mood: {
-        label: 'Neutral',
-        score: 0.5
-      },
-      imageUrl: ''
-    };
-
-    switch (mode) {
-      case 'manual':
-        result.title = title;
-        result.content = content;
-        result.tags = tags;
-
-        // Parallel sentiment analysis
-        const [hfSentiment, mlSentiment] = await Promise.all([
-          analyzeSentimentHuggingFace(content),
-          analyzeSentimentML(content)
-        ]);
-
-        result.mood = {
-          label: mlSentiment.label || hfSentiment.label || 'Neutral',
-          score: Math.max(mlSentiment.score || 0, hfSentiment.score || 0.5)
-        };
-        break;
-
-      case 'minimal':
-        if (title && !content) {
-          const [expandedContent, generatedTags, sentimentData] = await Promise.all([
-            expandMemoryContent(title),
-            generateTagsFromContent(title),
-            Promise.all([
-              analyzeSentimentHuggingFace(title),
-              analyzeSentimentML(title)
-            ])
-          ]);
-
-          result.title = title;
-          result.content = expandedContent;
-          result.tags = generatedTags;
-          result.mood = {
-            label: sentimentData[1].label || sentimentData[0].label || 'Neutral',
-            score: Math.max(sentimentData[1].score || 0, sentimentData[0].score || 0.5)
-          };
-        } else if (mood && !title && !content) {
-          const memoryData = await generateMemoryDataML(mood);
-          const [hfSentiment, mlSentiment] = await Promise.all([
-            analyzeSentimentHuggingFace(memoryData.content),
-            analyzeSentimentML(memoryData.content)
-          ]);
-
-          result.title = memoryData.title;
-          result.content = memoryData.content;
-          result.tags = memoryData.tags;
-          result.mood = {
-            label: mlSentiment.label || hfSentiment.label || mood,
-            score: Math.max(mlSentiment.score || 0, hfSentiment.score || 0.5)
-          };
-        }
-        break;
-
-      case 'image':
-        if (images.length > 0) {
-          const processedImages = [];
-          for (const image of images) {
-            const imageUrl = await uploadToS3(image, userId);
-            processedImages.push(imageUrl);
-
-            const extractedText = await extractTextFromImage(image);
-            if (extractedText) {
-              content += extractedText + ' ';
-            }
-          }
-
-          if (content.trim()) {
-            const [mlProcessedData, hfSentiment, mlSentiment, generatedTags] = await Promise.all([
-              processImageML(content.trim()),
-              analyzeSentimentHuggingFace(content.trim()),
-              analyzeSentimentML(content.trim()),
-              generateTagsFromContent(content.trim())
-            ]);
-
-            result.title = mlProcessedData.suggestedTitle || 'Untitled Memory';
-            result.content = content.trim();
-            result.tags = [...new Set([...generatedTags, ...mlProcessedData.suggestedTags])];
-            result.mood = {
-              label: mlSentiment.label || hfSentiment.label || 'Neutral',
-              score: Math.max(mlSentiment.score || 0, hfSentiment.score || 0.5)
-            };
-            result.imageUrl = processedImages[0];
-          }
-        }
-        break;
-
-      default:
-        return NextResponse.json({ error: 'Invalid processing mode' }, { status: 400 });
-    }
-
-    const validationResult = validateMemoryData(result);
-    if (!validationResult.isValid) {
+    // Validate required fields
+    if (!title || !content) {
       return NextResponse.json({ 
-        error: 'Validation failed', 
-        details: validationResult.errors 
+        error: 'Missing required fields', 
+        details: 'Title and content are required' 
       }, { status: 400 });
     }
 
-    return NextResponse.json(result);
+    // Process images and upload to S3
+    const imageUrls: string[] = [];
+    const imageFields = Array.from(formData.keys()).filter(key => key.startsWith('image_'));
+    
+    console.log(`Processing ${imageFields.length} images for user ${userId}`);
 
-  } catch (error) {
+    for (const fieldName of imageFields) {
+      const imageFile = formData.get(fieldName) as File;
+      
+      if (imageFile && imageFile.size > 0) {
+        try {
+          console.log(`Uploading image: ${imageFile.name}, Size: ${imageFile.size} bytes`);
+          const imageUrl = await uploadToS3(imageFile, userId);
+          imageUrls.push(imageUrl);
+          console.log(`Successfully uploaded image to: ${imageUrl}`);
+        } catch (uploadError) {
+          console.error(`Failed to upload image ${imageFile.name}:`, uploadError);
+          // Continue processing other images even if one fails
+        }
+      }
+    }
+
+    // Analyze sentiment from content
+    let sentiment = mood;
+    try {
+      // Try to get more accurate sentiment analysis
+      const sentimentResult = await analyzeSentimentML(content).catch(() => 
+        analyzeSentimentHuggingFace(content).catch(() => null)
+      );
+      
+      if (sentimentResult?.label) {
+        sentiment = sentimentResult.label.toLowerCase();
+      }
+    } catch (sentimentError) {
+      console.error('Sentiment analysis failed:', sentimentError);
+      // Use the mood provided by user as fallback
+    }
+
+    // Map mood to database enum
+    const moodMapping: { [key: string]: 'positive' | 'neutral' | 'negative' } = {
+      'happy': 'positive',
+      'excited': 'positive',
+      'loved': 'positive',
+      'neutral': 'neutral',
+      'sad': 'negative',
+      'frustrated': 'negative',
+      'angry': 'negative'
+    };
+    
+    const dbMood = moodMapping[mood.toLowerCase()] || 'neutral';
+
+    // Save memory to database
+    console.log('Saving memory to database...');
+    const memory = await prisma.memory.create({
+      data: {
+        userId: userId,
+        title: title,
+        content: content,
+        tags: tags,
+        mood: dbMood,
+        date: new Date(date),
+        location: location || null,
+        people: people || null,
+        imageUrl: imageUrls.length > 0 ? imageUrls[0] : null,
+        images: imageUrls,
+        sentiment: sentiment,
+        isPrivate: isPrivate,
+        isFavorite: isFavorite
+      }
+    });
+
+    console.log(`Memory created successfully with ID: ${memory.id}`);
+
+    return NextResponse.json({
+      success: true,
+      memory: {
+        id: memory.id,
+        title: memory.title,
+        content: memory.content,
+        tags: memory.tags,
+        mood: memory.mood,
+        date: memory.date,
+        location: memory.location,
+        people: memory.people,
+        imageUrl: memory.imageUrl,
+        images: memory.images,
+        sentiment: memory.sentiment,
+        isPrivate: memory.isPrivate,
+        isFavorite: memory.isFavorite,
+        createdAt: memory.createdAt
+      },
+      message: 'Memory saved successfully!'
+    }, { status: 201 });
+
+  } catch (error: any) {
     console.error('Memory processing error:', error);
     return NextResponse.json({ 
       error: 'Internal server error',
-      message: process.env.NODE_ENV === 'development' ? error.message : 'Processing failed'
+      message: process.env.NODE_ENV === 'development' ? error.message : 'Failed to save memory',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     }, { status: 500 });
   }
 }

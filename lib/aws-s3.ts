@@ -38,7 +38,7 @@ export async function uploadToS3(file: File, userId: string): Promise<string> {
       Key: fileName,
       Body: processedBuffer,
       ContentType: file.type,
-      ACL: 'public-read' as AWS.S3.ObjectCannedACL
+      // ACL: 'public-read' as AWS.S3.ObjectCannedACL
     };
     
     const result = await s3.upload(uploadParams).promise();

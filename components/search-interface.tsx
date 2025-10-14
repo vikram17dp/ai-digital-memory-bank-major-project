@@ -164,7 +164,8 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
     favoritesOnly: false
   })
   const [sortBy, setSortBy] = useState('date-desc')
-  const [searchResults, setSearchResults] = useState(mockMemories)
+  const actualMemories = memories || mockMemories
+  const [searchResults, setSearchResults] = useState(actualMemories)
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [searchHistory, setSearchHistory] = useState(recentSearches)
@@ -213,23 +214,23 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
     const suggestions = []
     
     // Add matching tags
-    const allTags = Array.from(new Set(mockMemories.flatMap(m => m.tags)))
+    const allTags = Array.from(new Set(actualMemories.flatMap(m => m.tags)))
     const matchingTags = allTags
       .filter(tag => tag.toLowerCase().includes(searchTerm))
       .slice(0, 3)
     
     suggestions.push(...matchingTags)
     
-    // Add matching locations
-    const allLocations = Array.from(new Set(mockMemories.map(m => m.location)))
+    // Add matching locations (if available)
+    const allLocations = Array.from(new Set(actualMemories.filter(m => m.location).map(m => m.location)))
     const matchingLocations = allLocations
       .filter(location => location.toLowerCase().includes(searchTerm))
       .slice(0, 2)
     
     suggestions.push(...matchingLocations)
     
-    // Add matching people
-    const allPeople = Array.from(new Set(mockMemories.flatMap(m => 
+    // Add matching people (if available)
+    const allPeople = Array.from(new Set(actualMemories.filter(m => m.people).flatMap(m => 
       m.people.split(',').map(p => p.trim())
     )))
     const matchingPeople = allPeople
@@ -254,7 +255,7 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
       
       // Simulate search delay with debouncing
       const searchTimer = setTimeout(() => {
-        const filtered = mockMemories.filter(memory => {
+        const filtered = actualMemories.filter(memory => {
           // Search query matching
           const searchTerm = searchQuery.toLowerCase()
           const matchesQuery = 
@@ -301,7 +302,7 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
       return () => clearTimeout(searchTimer)
     } else {
       // Apply filters even when no search query
-      const filtered = mockMemories.filter(memory => {
+      const filtered = actualMemories.filter(memory => {
         const matchesMood = !filters.mood || memory.mood === filters.mood
         const matchesTags = filters.tags.length === 0 || filters.tags.every(tag => memory.tags.includes(tag))
         const matchesLocation = !filters.location || memory.location.toLowerCase().includes(filters.location.toLowerCase())

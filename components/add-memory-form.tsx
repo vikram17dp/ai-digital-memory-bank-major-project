@@ -32,7 +32,10 @@ import {
   Lightbulb,
   RotateCcw,
   Brain,
-  Download
+  Download,
+  BookOpen,
+  MessageSquare,
+
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -95,9 +98,31 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
   const [showAiResults, setShowAiResults] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [newTag, setNewTag] = useState('')
+  const [savedMemories, setSavedMemories] = useState<any[]>([])
+  const [isLoadingMemories, setIsLoadingMemories] = useState(false)
 
   const totalSteps = 3
   const progress = (currentStep / totalSteps) * 100
+
+  // Fetch saved memories when component mounts
+  useEffect(() => {
+    const fetchMemories = async () => {
+      setIsLoadingMemories(true)
+      try {
+        const response = await fetch('/api/memories/list?limit=6')
+        const data = await response.json()
+        if (data.success) {
+          setSavedMemories(data.memories)
+        }
+      } catch (error) {
+        console.error('Failed to fetch memories:', error)
+      } finally {
+        setIsLoadingMemories(false)
+      }
+    }
+    
+    fetchMemories()
+  }, [])
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }))
@@ -385,6 +410,17 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
           }
         }
       })
+      
+      // Refresh memories list
+      try {
+        const response = await fetch('/api/memories/list?limit=6')
+        const data = await response.json()
+        if (data.success) {
+          setSavedMemories(data.memories)
+        }
+      } catch (error) {
+        console.error('Failed to refresh memories:', error)
+      }
       
       // Reset form for next memory
       setFormData({
@@ -1057,9 +1093,9 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                 <Camera className="h-10 w-10 text-white" />
               </div>
               <h2 className="text-2xl font-bold bg-gradient-to-r from-green-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent mb-2">
-                Add Visual Memories
+                Preview & Share
               </h2>
-              <p className="text-gray-600 dark:text-gray-300">Upload images to make your memory more vivid (Optional)</p>
+              <p className="text-gray-600 dark:text-gray-300">Review your memory and see your collection</p>
             </div>
 
             <div className="space-y-6">
@@ -1067,11 +1103,11 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
               <div className="space-y-4">
                 <Label className="text-sm font-semibold text-gray-700 dark:text-gray-300">
                   <Image className="inline h-4 w-4 mr-2" />
-                  Photos ({formData.images.length}/5)
+                  Photos ({formData.images.length}/5) - Optional
                 </Label>
                 
                 <div 
-                  className={`relative border-2 border-dashed rounded-2xl p-8 transition-all duration-300 hover:border-blue-400 dark:hover:border-blue-500 ${
+                  className={`relative border-2 border-dashed rounded-2xl p-6 transition-all duration-300 hover:border-blue-400 dark:hover:border-blue-500 ${
                     dragActive 
                       ? 'border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20' 
                       : 'border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-800/30'
@@ -1090,27 +1126,28 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                     className="hidden"
                   />
                   
-                  <div className="text-center space-y-4">
-                    <div className="w-16 h-16 mx-auto bg-gradient-to-br from-blue-500 to-purple-500 rounded-2xl flex items-center justify-center">
-                      <Upload className="h-8 w-8 text-white" />
+                  <div className="text-center space-y-3">
+                    <div className="w-12 h-12 mx-auto bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center">
+                      <Upload className="h-6 w-6 text-white" />
                     </div>
                     
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-2">
-                        Drop images here or click to browse
+                      <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">
+                        Add photos to your memory
                       </h3>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Support: JPG, PNG, GIF up to 5MB each
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        JPG, PNG, GIF up to 5MB each
                       </p>
                     </div>
                     
                     <Button 
                       type="button"
                       variant="outline"
+                      size="sm"
                       onClick={() => fileInputRef.current?.click()}
                       className="bg-white/80 dark:bg-gray-800/80 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-200"
                     >
-                      <Upload className="h-4 w-4 mr-2" />
+                      <Upload className="h-3 w-3 mr-2" />
                       Choose Files
                     </Button>
                   </div>
@@ -1118,14 +1155,14 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                 
                 {/* Image Previews */}
                 {imagePreviewUrls.length > 0 && (
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
                     {imagePreviewUrls.map((url, index) => (
                       <div key={index} className="relative group">
-                        <div className="aspect-square rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 shadow-md group-hover:shadow-lg transition-shadow duration-300">
+                        <div className="aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 shadow-sm">
                           <img 
                             src={url} 
                             alt={`Preview ${index + 1}`} 
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            className="w-full h-full object-cover"
                           />
                         </div>
                         <Button
@@ -1133,9 +1170,9 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                           variant="destructive"
                           size="sm"
                           onClick={() => removeImage(index)}
-                          className="absolute -top-2 -right-2 w-8 h-8 rounded-full p-0 shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                          className="absolute -top-1 -right-1 w-6 h-6 rounded-full p-0 shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-200"
                         >
-                          <X className="h-4 w-4" />
+                          <X className="h-3 w-3" />
                         </Button>
                       </div>
                     ))}
@@ -1143,67 +1180,165 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                 )}
               </div>
 
-              {/* Memory Preview */}
+              {/* Memory Preview Card - Instagram Style */}
               <div className="space-y-4">
                 <Label className="text-sm font-semibold text-gray-700 dark:text-gray-300">
                   <Sparkles className="inline h-4 w-4 mr-2" />
-                  Memory Preview
+                  Your Memory
                 </Label>
                 
-                <Card className="bg-gradient-to-br from-white/90 to-gray-50/90 dark:from-gray-800/90 dark:to-gray-700/90 backdrop-blur-sm border border-gray-200/60 dark:border-gray-700/60 shadow-lg">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg font-semibold text-gray-800 dark:text-gray-200">
-                        {formData.title || 'Untitled Memory'}
-                      </CardTitle>
+                {/* Desktop: Smaller card, Mobile: Full width */}
+                <div className="max-w-lg mx-auto lg:max-w-md">
+                  <Card className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden shadow-lg">
+                    {/* Header with user info */}
+                    <div className="p-3 sm:p-4 flex items-center gap-3 border-b border-gray-200 dark:border-gray-700">
+                      <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold text-sm sm:text-base">
+                        {user?.firstName?.[0] || 'U'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm text-gray-800 dark:text-gray-200 truncate">
+                          {user?.firstName || 'You'}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          {formData.location || 'Just now'}
+                        </p>
+                      </div>
                       {formData.mood && (
-                        <div className={`p-2 rounded-lg ${moodOptions.find(m => m.value === formData.mood)?.bgColor}`}>
+                        <div className={`p-1.5 sm:p-2 rounded-lg ${moodOptions.find(m => m.value === formData.mood)?.bgColor}`}>
                           {React.createElement(moodOptions.find(m => m.value === formData.mood)?.icon || Smile, {
-                            className: "h-5 w-5"
+                            className: "h-3.5 w-3.5 sm:h-4 sm:w-4"
                           })}
                         </div>
                       )}
                     </div>
-                    
-                    <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-4 w-4" />
-                        {new Date(formData.date).toLocaleDateString()}
-                      </span>
-                      {formData.location && (
-                        <span className="flex items-center gap-1">
-                          <MapPin className="h-4 w-4" />
-                          {formData.location}
-                        </span>
+
+                    {/* Image Gallery - Smaller on desktop */}
+                    {imagePreviewUrls.length > 0 && (
+                      <div className="relative aspect-square sm:aspect-[4/3] lg:aspect-video bg-gray-100 dark:bg-gray-900">
+                        <img 
+                          src={imagePreviewUrls[0]} 
+                          alt="Memory" 
+                          className="w-full h-full object-cover"
+                        />
+                        {imagePreviewUrls.length > 1 && (
+                          <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded-full font-medium">
+                            1/{imagePreviewUrls.length}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Content */}
+                    <div className="p-3 sm:p-4 space-y-2 sm:space-y-3">
+                      <h3 className="font-bold text-base sm:text-lg text-gray-800 dark:text-gray-200">
+                        {formData.title || 'Untitled Memory'}
+                      </h3>
+                      
+                      {formData.content && (
+                        <p className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 leading-relaxed line-clamp-3 sm:line-clamp-none">
+                          {formData.content}
+                        </p>
                       )}
+
+                      {formData.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {formData.tags.map((tag) => (
+                            <span key={tag} className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-3 sm:gap-4 text-xs text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-100 dark:border-gray-700">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          <span className="hidden sm:inline">{new Date(formData.date).toLocaleDateString()}</span>
+                          <span className="sm:hidden">{new Date(formData.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                        </span>
+                        {formData.people && (
+                          <span className="flex items-center gap-1 truncate">
+                            <Users className="h-3 w-3 flex-shrink-0" />
+                            <span className="truncate">{formData.people}</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </CardHeader>
-                  
-                  <CardContent className="space-y-4">
-                    {formData.content && (
-                      <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-                        {formData.content}
-                      </p>
-                    )}
-                    
-                    {formData.people && (
-                      <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4 text-gray-500" />
-                        <span className="text-sm text-gray-600 dark:text-gray-400">{formData.people}</span>
+                  </Card>
+                </div>
+              </div>
+
+              {/* Recent Memories Feed - Instagram/Threads Style */}
+              <div className="space-y-3 sm:space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <Label className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 sm:gap-2">
+                    <BookOpen className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    <span>Your Recent Memories</span>
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    {savedMemories.length} saved
+                  </span>
+                </Label>
+
+                {isLoadingMemories ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
+                    {[1, 2, 3, 4].map((i) => (
+                      <div key={i} className="aspect-square bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
+                    ))}
+                  </div>
+                ) : savedMemories.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
+                    {savedMemories.map((memory) => (
+                      <div 
+                        key={memory.id} 
+                        className="group relative aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all duration-200 shadow-sm hover:shadow-md"
+                      >
+                        {memory.imageUrl || memory.images?.[0] ? (
+                          <img 
+                            src={memory.imageUrl || memory.images[0]} 
+                            alt={memory.title} 
+                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-400 to-purple-400">
+                            <BookOpen className="h-6 w-6 sm:h-8 sm:w-8 text-white opacity-50" />
+                          </div>
+                        )}
+                        
+                        {/* Overlay on hover - Hidden on mobile, shown on desktop hover */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end p-2 sm:p-3">
+                          <h4 className="text-white font-semibold text-xs sm:text-sm line-clamp-2">
+                            {memory.title}
+                          </h4>
+                          <p className="text-white/90 text-xs mt-0.5 sm:mt-1 hidden sm:block">
+                            {new Date(memory.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </p>
+                        </div>
+
+                        {/* Mobile: Always visible title at bottom */}
+                        <div className="sm:hidden absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-2">
+                          <h4 className="text-white font-medium text-xs line-clamp-1">
+                            {memory.title}
+                          </h4>
+                        </div>
+
+                        {/* Mood badge */}
+                        {memory.mood && (
+                          <div className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-white/95 dark:bg-gray-800/95 flex items-center justify-center shadow-sm">
+                            {memory.mood === 'positive' && <Heart className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-green-500" />}
+                            {memory.mood === 'neutral' && <Meh className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-gray-500" />}
+                            {memory.mood === 'negative' && <Frown className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-blue-500" />}
+                          </div>
+                        )}
                       </div>
-                    )}
-                    
-                    {formData.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {formData.tags.map((tag) => (
-                          <Badge key={tag} variant="secondary" className="text-xs px-2 py-1">
-                            #{tag}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 sm:py-8 text-gray-500 dark:text-gray-400">
+                    <BookOpen className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-2 sm:mb-3 opacity-30" />
+                    <p className="text-xs sm:text-sm px-4">No memories yet. Save this one to get started! 🎉</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

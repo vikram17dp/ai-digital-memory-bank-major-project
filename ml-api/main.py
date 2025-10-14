@@ -11,8 +11,6 @@ import logging
 # ML and AI imports
 import numpy as np
 from sentence_transformers import SentenceTransformer
-from pinecone import Pinecone, ServerlessSpec
-import openai
 from textblob import TextBlob
 import re
 
@@ -69,6 +67,9 @@ class ChatResponse(BaseModel):
     response: str
     related_memories: List[Dict[str, Any]]
 
+# In-memory storage for testing (replace with database in production)
+memory_storage = {}
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize ML models and services on startup"""
@@ -79,44 +80,40 @@ async def startup_event():
         logger.info("Loading sentence transformer model...")
         embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
         
-        # Initialize Pinecone
-        logger.info("Initializing Pinecone...")
+        # Initialize Pinecone (optional - only if API key is available)
         pinecone_api_key = os.getenv("PINECONE_API_KEY")
         pinecone_index_name = os.getenv("PINECONE_INDEX_NAME", "memory-embeddings")
         
-        if not pinecone_api_key:
-            logger.error("PINECONE_API_KEY not found in environment variables")
-            raise ValueError("PINECONE_API_KEY is required")
-        
-        pinecone_client = Pinecone(api_key=pinecone_api_key)
-        
-        # Create index if it doesn't exist
-        try:
-            pinecone_index = pinecone_client.Index(pinecone_index_name)
-            logger.info(f"Connected to existing Pinecone index: {pinecone_index_name}")
-        except Exception as e:
-            logger.info(f"Creating new Pinecone index: {pinecone_index_name}")
-            pinecone_client.create_index(
-                name=pinecone_index_name,
-                dimension=384,  # all-MiniLM-L6-v2 embedding dimension
-                metric="cosine",
-                spec=ServerlessSpec(cloud="aws", region="us-east-1")
-            )
-            pinecone_index = pinecone_client.Index(pinecone_index_name)
-        
-        # Initialize OpenAI (optional, for enhanced responses)
-        openai_api_key = os.getenv("OPENAI_API_KEY")
-        if openai_api_key:
-            openai.api_key = openai_api_key
-            logger.info("OpenAI API initialized")
+        if pinecone_api_key:
+            logger.info("Initializing Pinecone...")
+            from pinecone import Pinecone, ServerlessSpec
+            pinecone_client = Pinecone(api_key=pinecone_api_key)
+            
+            # Create index if it doesn't exist
+            try:
+                pinecone_index = pinecone_client.Index(pinecone_index_name)
+                logger.info(f"Connected to existing Pinecone index: {pinecone_index_name}")
+            except Exception as e:
+                logger.info(f"Creating new Pinecone index: {pinecone_index_name}")
+                pinecone_client.create_index(
+                    name=pinecone_index_name,
+                    dimension=384,  # all-MiniLM-L6-v2 embedding dimension
+                    metric="cosine",
+                    spec=ServerlessSpec(cloud="aws", region="us-east-1")
+                )
+                pinecone_index = pinecone_client.Index(pinecone_index_name)
         else:
-            logger.warning("OpenAI API key not found - using basic responses")
+            logger.warning("PINECONE_API_KEY not found - Pinecone features disabled")
+            pinecone_client = None
+            pinecone_index = None
         
         logger.info("ML service startup completed successfully")
         
     except Exception as e:
         logger.error(f"Error during startup: {str(e)}")
-        raise
+        # Don't raise the exception, allow the service to start without Pinecone
+        pinecone_client = None
+        pinecone_index = None
 
 def analyze_sentiment(text: str) -> tuple[str, float]:
     """Analyze sentiment using TextBlob"""
@@ -190,22 +187,39 @@ async def analyze_memory(request: MemoryAnalysisRequest):
         combined_text = f"{request.title} {request.content} {' '.join(suggested_tags)}"
         embedding = embedding_model.encode(combined_text).tolist()
         
-        # Store in Pinecone
+        # Store in Pinecone only if available
         pinecone_id = f"memory_{request.id}"
-        pinecone_index.upsert([
-            {
-                "id": pinecone_id,
-                "values": embedding,
-                "metadata": {
-                    "memory_id": request.id,
-                    "title": request.title,
-                    "content": request.content[:500],  # Truncate for metadata
-                    "tags": suggested_tags,
-                    "sentiment": sentiment,
-                    "timestamp": datetime.now().isoformat()
-                }
+        if pinecone_index:
+            try:
+                pinecone_index.upsert([
+                    {
+                        "id": pinecone_id,
+                        "values": embedding,
+                        "metadata": {
+                            "memory_id": request.id,
+                            "title": request.title,
+                            "content": request.content[:500],  # Truncate for metadata
+                            "tags": suggested_tags,
+                            "sentiment": sentiment,
+                            "timestamp": datetime.now().isoformat()
+                        }
+                    }
+                ])
+                logger.info(f"Memory {request.id} stored in Pinecone")
+            except Exception as e:
+                logger.warning(f"Failed to store in Pinecone: {str(e)}")
+        else:
+            # Store in memory for testing
+            memory_storage[request.id] = {
+                "id": request.id,
+                "title": request.title,
+                "content": request.content,
+                "tags": suggested_tags,
+                "sentiment": sentiment,
+                "embedding": embedding,
+                "timestamp": datetime.now().isoformat()
             }
-        ])
+            logger.info(f"Memory {request.id} stored in memory storage")
         
         return MemoryAnalysisResponse(
             id=request.id,
@@ -227,26 +241,53 @@ async def semantic_search(request: SearchRequest):
         # Generate query embedding
         query_embedding = embedding_model.encode(request.query).tolist()
         
-        # Search in Pinecone
-        search_results = pinecone_index.query(
-            vector=query_embedding,
-            top_k=request.top_k,
-            include_metadata=True,
-            filter={"memory_id": {"$exists": True}}  # Basic filter
-        )
-        
-        # Format results
         results = []
-        for match in search_results.matches:
-            results.append({
-                "memory_id": match.metadata.get("memory_id"),
-                "title": match.metadata.get("title"),
-                "content": match.metadata.get("content"),
-                "tags": match.metadata.get("tags", []),
-                "sentiment": match.metadata.get("sentiment"),
-                "score": float(match.score),
-                "timestamp": match.metadata.get("timestamp")
-            })
+        
+        if pinecone_index:
+            # Search in Pinecone
+            search_results = pinecone_index.query(
+                vector=query_embedding,
+                top_k=request.top_k,
+                include_metadata=True,
+                filter={"memory_id": {"$exists": True}}
+            )
+            
+            # Format results
+            for match in search_results.matches:
+                results.append({
+                    "memory_id": match.metadata.get("memory_id"),
+                    "title": match.metadata.get("title"),
+                    "content": match.metadata.get("content"),
+                    "tags": match.metadata.get("tags", []),
+                    "sentiment": match.metadata.get("sentiment"),
+                    "score": float(match.score),
+                    "timestamp": match.metadata.get("timestamp")
+                })
+        else:
+            # Simple in-memory search using cosine similarity
+            query_embedding_np = np.array(query_embedding)
+            
+            for memory_id, memory in memory_storage.items():
+                if memory['embedding']:
+                    memory_embedding = np.array(memory['embedding'])
+                    # Calculate cosine similarity
+                    similarity = np.dot(query_embedding_np, memory_embedding) / (
+                        np.linalg.norm(query_embedding_np) * np.linalg.norm(memory_embedding)
+                    )
+                    
+                    results.append({
+                        "memory_id": memory['id'],
+                        "title": memory['title'],
+                        "content": memory['content'][:200] + "..." if len(memory['content']) > 200 else memory['content'],
+                        "tags": memory['tags'],
+                        "sentiment": memory['sentiment'],
+                        "score": float(similarity),
+                        "timestamp": memory['timestamp']
+                    })
+            
+            # Sort by similarity score and get top_k
+            results.sort(key=lambda x: x['score'], reverse=True)
+            results = results[:request.top_k]
         
         return SearchResponse(
             results=results,
@@ -281,7 +322,7 @@ async def chat_with_memories(request: ChatRequest):
                 for mem in context_memories[:2]
             ])
             
-            # Generate response (basic version without OpenAI)
+            # Generate response (basic version)
             if len(context_memories) == 1:
                 memory = context_memories[0]
                 response = f"I found a relevant memory about '{memory['title']}'. {memory['content'][:200]}{'...' if len(memory['content']) > 200 else ''}"
@@ -313,7 +354,16 @@ async def health_check():
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "models_loaded": embedding_model is not None,
-        "pinecone_connected": pinecone_index is not None
+        "pinecone_connected": pinecone_index is not None,
+        "memories_stored": len(memory_storage)
+    }
+
+@app.get("/memories")
+async def get_stored_memories():
+    """Get all stored memories (for testing)"""
+    return {
+        "count": len(memory_storage),
+        "memories": list(memory_storage.values())
     }
 
 if __name__ == "__main__":

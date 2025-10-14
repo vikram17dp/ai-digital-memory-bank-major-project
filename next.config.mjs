@@ -9,8 +9,6 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // Optimize font loading
-  optimizeFonts: true,
   // Server-side configuration
   serverRuntimeConfig: {
     // Will only be available on the server side

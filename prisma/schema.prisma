@@ -4,21 +4,31 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DIRECT_URL")  
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 model Memory {
-  id        String   @id @default(cuid())
-  userId    String
-  content   String
-  tags      String[]
-  mood      Mood     @default(neutral)
-  date      DateTime @default(now())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  userId      String
+  title       String?
+  content     String
+  tags        String[]
+  mood        Mood     @default(neutral)
+  date        DateTime @default(now())
+  location    String?
+  people      String?
+  imageUrl    String?
+  images      String[]
+  sentiment   String   @default("neutral")
+  isPrivate   Boolean  @default(false)
+  isFavorite  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([userId, date(sort: Desc)])
   @@index([userId, mood])
+  @@index([userId, isFavorite])
   @@map("Memory") 
 }
 

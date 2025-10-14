@@ -68,9 +68,9 @@ interface Insights {
 }
 
 interface DashboardContentProps {
-  activeSection: string
-  onSectionChange: (section: string) => void
-  user: User
+  activeSection?: string
+  onSectionChange?: (section: string) => void
+  user?: User
   memories?: Memory[]
   insights?: Insights
 }
@@ -212,7 +212,7 @@ const StatsCard: React.FC<{
   )
 }
 
-export function DashboardContent({ activeSection, onSectionChange, user, memories = sampleMemories, insights = sampleInsights }: DashboardContentProps) {
+export function DashboardContent({ activeSection = 'dashboard', onSectionChange = () => {}, user, memories = sampleMemories, insights = sampleInsights }: DashboardContentProps) {
   const getUserInitials = () => {
     if (user?.firstName && user?.lastName) {
       return `${user.firstName[0]}${user.lastName[0]}`
