@@ -460,7 +460,11 @@ export async function POST(req: NextRequest) {
     const user = await currentUser();
     
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ 
+        success: false,
+        error: 'Unauthorized',
+        message: 'Please sign in to use this feature'
+      }, { status: 401 });
     }
 
     // Check if any vision API is available
@@ -479,17 +483,29 @@ export async function POST(req: NextRequest) {
     const imageFile = formData.get('image') as File;
     
     if (!imageFile) {
-      return NextResponse.json({ error: 'No image provided' }, { status: 400 });
+      return NextResponse.json({ 
+        success: false,
+        error: 'No image provided',
+        message: 'Please upload an image to analyze'
+      }, { status: 400 });
     }
 
     // Validate image type
     if (!imageFile.type.startsWith('image/')) {
-      return NextResponse.json({ error: 'Invalid file type. Please upload an image.' }, { status: 400 });
+      return NextResponse.json({ 
+        success: false,
+        error: 'Invalid file type',
+        message: 'Please upload an image file (JPG, PNG, GIF, WebP)'
+      }, { status: 400 });
     }
 
     // Validate image size (5MB limit)
     if (imageFile.size > 5 * 1024 * 1024) {
-      return NextResponse.json({ error: 'Image too large. Please upload an image smaller than 5MB.' }, { status: 400 });
+      return NextResponse.json({ 
+        success: false,
+        error: 'Image too large',
+        message: 'Please upload an image smaller than 5MB'
+      }, { status: 400 });
     }
 
     console.log(`Processing image: ${imageFile.name}, Size: ${imageFile.size} bytes`);
@@ -505,13 +521,17 @@ export async function POST(req: NextRequest) {
       success: true,
       data: extractedData,
       message: `Memory details extracted with ${Math.round(extractedData.confidence * 100)}% confidence`
-    });
+    }, { status: 200 });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Memory extraction error:', error);
+    
+    // Always return valid JSON, even on error
     return NextResponse.json({
+      success: false,
       error: 'Failed to analyze image',
-      message: 'An error occurred while processing your image. Please try again.'
+      message: error?.message || 'An error occurred while processing your image. Please try again.',
+      details: process.env.NODE_ENV === 'development' ? error?.stack : undefined
     }, { status: 500 });
   }
 }

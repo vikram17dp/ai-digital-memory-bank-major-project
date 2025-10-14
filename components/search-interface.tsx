@@ -36,6 +36,7 @@ import {
   DropdownMenuLabel
 } from '@/components/ui/dropdown-menu'
 import { Label } from '@/components/ui/label'
+import { MemoryCard } from './memory-card'
 
 interface SearchInterfaceProps {
   user?: any
@@ -172,6 +173,13 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
 
+  // Update search results when memories prop changes
+  useEffect(() => {
+    if (memories) {
+      setSearchResults(memories)
+    }
+  }, [memories])
+
   // Check if date is within time range
   const isWithinTimeRange = (memoryDate: string, timeRange: string) => {
     const now = new Date()
@@ -222,7 +230,7 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
     suggestions.push(...matchingTags)
     
     // Add matching locations (if available)
-    const allLocations = Array.from(new Set(actualMemories.filter(m => m.location).map(m => m.location)))
+    const allLocations = Array.from(new Set(actualMemories.filter(m => m.location).map(m => m.location!)))
     const matchingLocations = allLocations
       .filter(location => location.toLowerCase().includes(searchTerm))
       .slice(0, 2)
@@ -231,7 +239,7 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
     
     // Add matching people (if available)
     const allPeople = Array.from(new Set(actualMemories.filter(m => m.people).flatMap(m => 
-      m.people.split(',').map(p => p.trim())
+      m.people!.split(',').map(p => p.trim())
     )))
     const matchingPeople = allPeople
       .filter(person => person.toLowerCase().includes(searchTerm))
@@ -259,20 +267,20 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
           // Search query matching
           const searchTerm = searchQuery.toLowerCase()
           const matchesQuery = 
-            memory.title.toLowerCase().includes(searchTerm) ||
+            (memory.title || '').toLowerCase().includes(searchTerm) ||
             memory.content.toLowerCase().includes(searchTerm) ||
             memory.tags.some(tag => tag.toLowerCase().includes(searchTerm)) ||
-            memory.location.toLowerCase().includes(searchTerm) ||
-            memory.people.toLowerCase().includes(searchTerm)
+            (memory.location || '').toLowerCase().includes(searchTerm) ||
+            (memory.people || '').toLowerCase().includes(searchTerm)
           
           // Filter matching
           const matchesMood = !filters.mood || memory.mood === filters.mood
           const matchesTags = filters.tags.length === 0 || filters.tags.every(tag => memory.tags.includes(tag))
-          const matchesLocation = !filters.location || memory.location.toLowerCase().includes(filters.location.toLowerCase())
-          const matchesPeople = !filters.people || memory.people.toLowerCase().includes(filters.people.toLowerCase())
-          const matchesImages = !filters.hasImages || memory.images > 0
+          const matchesLocation = !filters.location || (memory.location || '').toLowerCase().includes(filters.location.toLowerCase())
+          const matchesPeople = !filters.people || (memory.people || '').toLowerCase().includes(filters.people.toLowerCase())
+          const matchesImages = !filters.hasImages || (memory.images && memory.images.length > 0) || memory.imageUrl
           const matchesFavorites = !filters.favoritesOnly || memory.isFavorite
-          const matchesTimeRange = isWithinTimeRange(memory.date, filters.timeRange)
+          const matchesTimeRange = isWithinTimeRange(memory.date || memory.createdAt, filters.timeRange)
           
           return matchesQuery && matchesMood && matchesTags && matchesLocation && matchesPeople && matchesImages && matchesFavorites && matchesTimeRange
         })
@@ -281,15 +289,15 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
         const sorted = [...filtered].sort((a, b) => {
           switch (sortBy) {
             case 'date-desc':
-              return new Date(b.date).getTime() - new Date(a.date).getTime()
+              return new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime()
             case 'date-asc':
-              return new Date(a.date).getTime() - new Date(b.date).getTime()
+              return new Date(a.date || a.createdAt).getTime() - new Date(b.date || b.createdAt).getTime()
             case 'favorites':
               if (a.isFavorite && !b.isFavorite) return -1
               if (!a.isFavorite && b.isFavorite) return 1
-              return new Date(b.date).getTime() - new Date(a.date).getTime()
+              return new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime()
             case 'title':
-              return a.title.localeCompare(b.title)
+              return (a.title || '').localeCompare(b.title || '')
             default:
               return 0
           }
@@ -305,11 +313,11 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
       const filtered = actualMemories.filter(memory => {
         const matchesMood = !filters.mood || memory.mood === filters.mood
         const matchesTags = filters.tags.length === 0 || filters.tags.every(tag => memory.tags.includes(tag))
-        const matchesLocation = !filters.location || memory.location.toLowerCase().includes(filters.location.toLowerCase())
-        const matchesPeople = !filters.people || memory.people.toLowerCase().includes(filters.people.toLowerCase())
-        const matchesImages = !filters.hasImages || memory.images > 0
+        const matchesLocation = !filters.location || (memory.location || '').toLowerCase().includes(filters.location.toLowerCase())
+        const matchesPeople = !filters.people || (memory.people || '').toLowerCase().includes(filters.people.toLowerCase())
+        const matchesImages = !filters.hasImages || (memory.images && memory.images.length > 0) || memory.imageUrl
         const matchesFavorites = !filters.favoritesOnly || memory.isFavorite
-        const matchesTimeRange = isWithinTimeRange(memory.date, filters.timeRange)
+        const matchesTimeRange = isWithinTimeRange(memory.date || memory.createdAt, filters.timeRange)
         
         return matchesMood && matchesTags && matchesLocation && matchesPeople && matchesImages && matchesFavorites && matchesTimeRange
       })
@@ -318,15 +326,15 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
       const sorted = [...filtered].sort((a, b) => {
         switch (sortBy) {
           case 'date-desc':
-            return new Date(b.date).getTime() - new Date(a.date).getTime()
+            return new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime()
           case 'date-asc':
-            return new Date(a.date).getTime() - new Date(b.date).getTime()
+            return new Date(a.date || a.createdAt).getTime() - new Date(b.date || b.createdAt).getTime()
           case 'favorites':
             if (a.isFavorite && !b.isFavorite) return -1
             if (!a.isFavorite && b.isFavorite) return 1
-            return new Date(b.date).getTime() - new Date(a.date).getTime()
+            return new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime()
           case 'title':
-            return a.title.localeCompare(b.title)
+            return (a.title || '').localeCompare(b.title || '')
           default:
             return 0
         }
@@ -913,104 +921,15 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
             {!isSearching && searchResults.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
                 {searchResults.map((memory, index) => (
-                  <Card 
-                    key={memory.id} 
-                    className="group bg-gradient-to-br from-white/95 to-gray-50/95 dark:from-gray-800/95 dark:to-gray-700/95 backdrop-blur-md border border-gray-200/60 dark:border-gray-700/60 hover:shadow-2xl hover:shadow-blue-500/20 transition-all duration-500 hover:scale-[1.05] cursor-pointer overflow-hidden animate-fadeIn hover:border-blue-300/50 dark:hover:border-blue-600/50"
+                  <div
+                    key={memory.id}
+                    className="animate-fadeIn"
                     style={{ 
                       animationDelay: `${index * 0.1}s`,
-                      transform: 'translateZ(0)' // Enable hardware acceleration
                     }}
                   >
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between mb-2">
-                        <CardTitle className="text-lg font-semibold text-gray-800 dark:text-gray-200 line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                          {memory.title}
-                        </CardTitle>
-                        <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                          {memory.isFavorite && (
-                            <Tooltip>
-                              <TooltipTrigger>
-                                <Heart className="h-4 w-4 text-red-500 fill-current" />
-                              </TooltipTrigger>
-                              <TooltipContent>Favorite memory</TooltipContent>
-                            </Tooltip>
-                          )}
-                          {memory.images > 0 && (
-                            <Tooltip>
-                              <TooltipTrigger>
-                                <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-                                  <Image className="h-3 w-3" />
-                                  {memory.images}
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent>{memory.images} images</TooltipContent>
-                            </Tooltip>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {formatDate(memory.date)}
-                        </span>
-                        {memory.location && (
-                          <span className="flex items-center gap-1 truncate">
-                            <MapPin className="h-3 w-3" />
-                            {memory.location}
-                          </span>
-                        )}
-                      </div>
-                    </CardHeader>
-                    
-                    <CardContent className="space-y-4">
-                      <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed line-clamp-3">
-                        {memory.content}
-                      </p>
-                      
-                      <div className="flex items-center justify-between">
-                        <div className="flex flex-wrap gap-2">
-                          <Badge className={`text-xs px-2 py-1 ${getMoodColor(memory.mood)}`}>
-                            {memory.mood}
-                          </Badge>
-                          {memory.tags.slice(0, 2).map((tag) => (
-                            <Badge 
-                              key={tag} 
-                              variant="secondary" 
-                              className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                addTagFilter(tag)
-                              }}
-                            >
-                              #{tag}
-                            </Badge>
-                          ))}
-                          {memory.tags.length > 2 && (
-                            <Badge variant="secondary" className="text-xs px-2 py-1">
-                              +{memory.tags.length - 2}
-                            </Badge>
-                          )}
-                        </div>
-                        
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <Eye className="h-4 w-4 mr-1" />
-                          View
-                        </Button>
-                      </div>
-                      
-                      {memory.people && (
-                        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                          <Users className="h-3 w-3" />
-                          <span className="truncate">{memory.people}</span>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                    <MemoryCard memory={memory} />
+                  </div>
                 ))}
               </div>
             )}

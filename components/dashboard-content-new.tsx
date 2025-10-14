@@ -8,6 +8,7 @@ import ChatInterface from "./chat-interface"
 import { AddMemoryForm } from "./add-memory-form"
 import SearchInterface from "./search-interface"
 import { ProfileContent } from "./profile-content"
+import { MemoryCard } from "./memory-card"
 // Simple Avatar implementation
 const Avatar: React.FC<{children: React.ReactNode, className?: string}> = ({ children, className }) => (
   <div className={`relative inline-flex shrink-0 overflow-hidden ${className}`}>
@@ -42,12 +43,21 @@ interface User {
 
 interface Memory {
   id: string
-  title: string
+  title: string | null
   content: string
   tags: string[]
   sentiment: string | null
+  mood?: string | null
+  location?: string | null
+  people?: string | null
+  imageUrl?: string | null
+  images?: string[]
+  isFavorite?: boolean
+  isPrivate?: boolean
   createdAt: string
   updatedAt: string | null
+  date?: string
+  userId?: string
 }
 
 interface Insights {
@@ -124,56 +134,6 @@ const sampleInsights: Insights = {
     { tag: 'learning', count: 5 }
   ],
   recentTrends: { thisWeek: 4, lastWeek: 3 }
-}
-
-// Memory Card Component
-const MemoryCard: React.FC<{ memory: Memory }> = ({ memory }) => {
-  const getSentimentColor = (sentiment: string | null) => {
-    switch (sentiment?.toLowerCase()) {
-      case 'positive': return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
-      case 'negative': return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
-      case 'neutral': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
-      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
-    }
-  }
-
-  return (
-    <Card className="group hover:shadow-lg transition-all duration-300 hover:scale-[1.02] border-border/50">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <CardTitle className="text-base font-semibold group-hover:text-primary transition-colors line-clamp-2">
-            {memory.title}
-          </CardTitle>
-          <Badge className={`text-xs whitespace-nowrap ${getSentimentColor(memory.sentiment)}`}>
-            {memory.sentiment || 'neutral'}
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <p className="text-sm text-muted-foreground line-clamp-3 leading-relaxed">
-          {memory.content}
-        </p>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Clock className="h-3 w-3" />
-            {new Date(memory.createdAt).toLocaleDateString()}
-          </div>
-          <div className="flex gap-1">
-            {memory.tags.slice(0, 2).map((tag) => (
-              <Badge key={tag} variant="secondary" className="text-xs">
-                #{tag}
-              </Badge>
-            ))}
-            {memory.tags.length > 2 && (
-              <Badge variant="outline" className="text-xs">
-                +{memory.tags.length - 2}
-              </Badge>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
 }
 
 // Stats Card Component

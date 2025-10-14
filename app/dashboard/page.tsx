@@ -28,7 +28,7 @@ export default async function DashboardPage() {
     orderBy: {
       createdAt: 'desc',
     },
-    take: 50, // Fetch recent memories
+    take: 100, // Fetch more recent memories for better search and browsing
   })
 
   // Calculate insights
@@ -83,10 +83,19 @@ export default async function DashboardPage() {
   // Serialize memories for client component
   const serializedMemories = memories.map(memory => ({
     id: memory.id,
+    userId: memory.userId,
     title: memory.title || 'Untitled Memory',
     content: memory.content,
     tags: memory.tags,
     sentiment: memory.sentiment,
+    mood: memory.mood,
+    date: memory.date.toISOString(),
+    location: memory.location,
+    people: memory.people,
+    imageUrl: memory.imageUrl,
+    images: memory.images,
+    isFavorite: memory.isFavorite,
+    isPrivate: memory.isPrivate,
     createdAt: memory.createdAt.toISOString(),
     updatedAt: memory.updatedAt.toISOString(),
   }))
