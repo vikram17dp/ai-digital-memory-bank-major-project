@@ -44,7 +44,13 @@ export default function RootLayout({
         <body className="font-montserrat antialiased">
           <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
             {children}
-            <Toaster richColors/>
+            <Toaster 
+              richColors 
+              position="top-right"
+              expand={false}
+              duration={2500}
+              closeButton
+            />
           </ThemeProvider>
         </body>
       </html>

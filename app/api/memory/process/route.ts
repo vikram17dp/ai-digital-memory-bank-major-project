@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { uploadToS3, extractTextFromImage } from '@/lib/aws-s3';
+import { uploadToS3 } from '@/lib/s3';
+import { extractTextFromImage } from '@/lib/aws-s3';
 import { analyzeSentimentHuggingFace, generateContentFromTitle, generateTagsFromContent, expandMemoryContent } from '@/lib/hugging-face';
 import { analyzeSentimentML, processImageML, generateMemoryDataML } from '@/lib/ml-backend';
 import { validateMemoryData, sanitizeInput } from '@/lib/validation';
@@ -48,7 +49,12 @@ export async function POST(req: NextRequest) {
       if (imageFile && imageFile.size > 0) {
         try {
           console.log(`Uploading image: ${imageFile.name}, Size: ${imageFile.size} bytes`);
-          const imageUrl = await uploadToS3(imageFile, userId);
+          
+          // Convert File to Buffer for S3 upload
+          const arrayBuffer = await imageFile.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          
+          const imageUrl = await uploadToS3(buffer, imageFile.name, imageFile.type);
           imageUrls.push(imageUrl);
           console.log(`Successfully uploaded image to: ${imageUrl}`);
         } catch (uploadError) {

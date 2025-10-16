@@ -1,22 +1,34 @@
 "use client"
 
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Heart, Meh, Frown, MessageCircle, MoreHorizontal, MapPin, Users, Image as ImageIcon, X, Star, Clock } from "lucide-react"
+import { Calendar, Heart, Meh, Frown, MessageCircle, MoreHorizontal, MapPin, Users, Image as ImageIcon, X, Star, Clock, Trash2, Edit } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Separator } from "@/components/ui/separator"
+import { toast } from "sonner"
 import type { Memory } from "@prisma/client"
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { EditMemoryDialog } from "@/components/edit-memory-dialog"
 
 interface MemoryCardProps {
   memory: Memory
+  onUpdate?: () => void
 }
 
-export function MemoryCard({ memory }: MemoryCardProps) {
+export function MemoryCard({ memory, onUpdate }: MemoryCardProps) {
+  const router = useRouter()
   const [formattedDate, setFormattedDate] = useState<string>("")
   const [timeAgo, setTimeAgo] = useState<string>("")
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [isFavorite, setIsFavorite] = useState(memory.isFavorite)
+  const [isTogglingFavorite, setIsTogglingFavorite] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
 
   useEffect(() => {
     const date = new Date(memory.createdAt)
@@ -61,6 +73,75 @@ export function MemoryCard({ memory }: MemoryCardProps) {
   const hasImages = memory.images && memory.images.length > 0
   const displayImages = hasImages ? memory.images : (memory.imageUrl ? [memory.imageUrl] : [])
 
+  const handleToggleFavorite = async () => {
+    setIsTogglingFavorite(true)
+    const newFavoriteState = !isFavorite
+    
+    try {
+      const response = await fetch(`/api/memory/${memory.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...memory,
+          isFavorite: newFavoriteState,
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update favorite status')
+      }
+
+      setIsFavorite(newFavoriteState)
+      toast.success(newFavoriteState ? '⭐ Added to favorites!' : '✨ Removed from favorites', {
+        duration: 2000
+      })
+      
+      if (onUpdate) onUpdate()
+      router.refresh()
+      
+    } catch (error) {
+      console.error('Toggle favorite error:', error)
+      toast.error('Failed to update favorite status', { duration: 2500 })
+    } finally {
+      setIsTogglingFavorite(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    setIsDeleting(true)
+    toast.loading('Deleting memory...', { id: 'delete-memory' })
+    
+    try {
+      const response = await fetch(`/api/memory/${memory.id}`, {
+        method: 'DELETE'
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to delete memory')
+      }
+
+      toast.success('🗑️ Memory deleted successfully', { 
+        id: 'delete-memory',
+        duration: 2500
+      })
+      
+      setIsModalOpen(false)
+      setIsDeleteDialogOpen(false)
+      
+      if (onUpdate) onUpdate()
+      router.refresh()
+      
+    } catch (error) {
+      console.error('Delete error:', error)
+      toast.error('Failed to delete memory', { 
+        id: 'delete-memory',
+        duration: 2500
+      })
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   return (
     <>
     <div 
@@ -80,9 +161,10 @@ export function MemoryCard({ memory }: MemoryCardProps) {
               <span className="font-medium">{displayImages.length}</span>
             </div>
           )}
-          {memory.isFavorite && (
-            <div className="absolute top-3 right-3 bg-yellow-500/90 backdrop-blur-sm p-2 rounded-full">
-              <Star className="w-4 h-4 text-white fill-white" />
+          {/* Favorite Star - Top Right */}
+          {isFavorite && (
+            <div className="absolute top-3 right-3 bg-yellow-500 backdrop-blur-sm p-1.5 rounded-full shadow-lg">
+              <Star className="w-3.5 h-3.5 text-white fill-white" />
             </div>
           )}
           {/* View Button Overlay */}
@@ -113,17 +195,66 @@ export function MemoryCard({ memory }: MemoryCardProps) {
           </div>
           <h3 className="font-montserrat font-semibold text-lg text-white mb-1 line-clamp-2">{memory.title || 'Untitled Memory'}</h3>
         </div>
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className="opacity-100 hover:bg-gray-700/50 transition-colors"
-          onClick={(e) => {
-            e.stopPropagation()
-            // Add more actions menu here
-          }}
-        >
-          <MoreHorizontal className="w-4 h-4" />
-        </Button>
+        
+        {/* Three Dots Menu */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="opacity-100 hover:bg-gray-700/50 transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MoreHorizontal className="w-4 h-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48 bg-gray-800 border-gray-700">
+            <DropdownMenuItem 
+              onClick={(e) => {
+                e.stopPropagation()
+                setIsModalOpen(true)
+              }}
+              className="cursor-pointer hover:bg-gray-700 focus:bg-gray-700"
+            >
+              <MessageCircle className="w-4 h-4 mr-2" />
+              View Details
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              onClick={(e) => {
+                e.stopPropagation()
+                setIsEditDialogOpen(true)
+              }}
+              className="cursor-pointer hover:bg-gray-700 focus:bg-gray-700"
+            >
+              <Edit className="w-4 h-4 mr-2" />
+              Edit Memory
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              onClick={(e) => {
+                e.stopPropagation()
+                handleToggleFavorite()
+              }}
+              className="cursor-pointer hover:bg-gray-700 focus:bg-gray-700"
+              disabled={isTogglingFavorite}
+            >
+              <Star className={`w-4 h-4 mr-2 ${
+                isFavorite ? 'fill-yellow-500 text-yellow-500' : ''
+              }`} />
+              {isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="bg-gray-700" />
+            <DropdownMenuItem 
+              onClick={(e) => {
+                e.stopPropagation()
+                setIsDeleteDialogOpen(true)
+              }}
+              className="cursor-pointer text-red-400 hover:bg-red-500/10 focus:bg-red-500/10 focus:text-red-400"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete Memory
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Content */}
@@ -201,9 +332,19 @@ export function MemoryCard({ memory }: MemoryCardProps) {
                 )}
               </DialogDescription>
             </div>
-            {memory.isFavorite && (
-              <Star className="w-6 h-6 text-yellow-500 fill-yellow-500" />
-            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleToggleFavorite}
+              disabled={isTogglingFavorite}
+              className="hover:bg-gray-700/50"
+            >
+              <Star className={`w-5 h-5 ${
+                isFavorite 
+                  ? 'text-yellow-500 fill-yellow-500' 
+                  : 'text-gray-400'
+              }`} />
+            </Button>
           </div>
         </DialogHeader>
 
@@ -325,16 +466,74 @@ export function MemoryCard({ memory }: MemoryCardProps) {
 
         {/* Actions */}
         <div className="flex gap-3 pt-4 border-t border-gray-700">
-          <Button variant="outline" className="flex-1">
-            <Heart className="w-4 h-4 mr-2" />
-            {memory.isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
+          <Button 
+            variant="outline" 
+            className="flex-1"
+            onClick={handleToggleFavorite}
+            disabled={isTogglingFavorite}
+          >
+            <Star className={`w-4 h-4 mr-2 ${
+              isFavorite ? 'fill-yellow-500 text-yellow-500' : ''
+            }`} />
+            {isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
           </Button>
-          <Button variant="outline">
-            <MoreHorizontal className="w-4 h-4" />
+          <Button 
+            variant="outline"
+            className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+            onClick={() => setIsEditDialogOpen(true)}
+          >
+            <Edit className="w-4 h-4" />
+          </Button>
+          <Button 
+            variant="outline"
+            className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+            onClick={() => setIsDeleteDialogOpen(true)}
+            disabled={isDeleting}
+          >
+            <Trash2 className="w-4 h-4" />
           </Button>
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* Edit Memory Dialog */}
+    <EditMemoryDialog
+      memory={memory}
+      open={isEditDialogOpen}
+      onOpenChange={setIsEditDialogOpen}
+      onSuccess={() => {
+        if (onUpdate) onUpdate()
+        router.refresh()
+      }}
+    />
+
+    {/* Delete Confirmation Dialog */}
+    <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      <AlertDialogContent className="bg-gray-900 border-gray-700">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="text-white">Delete Memory?</AlertDialogTitle>
+          <AlertDialogDescription className="text-gray-400">
+            This action cannot be undone. This will permanently delete your memory
+            and remove all associated images from storage.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel 
+            className="bg-gray-800 text-gray-200 hover:bg-gray-700"
+            disabled={isDeleting}
+          >
+            Cancel
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleDelete}
+            disabled={isDeleting}
+            className="bg-red-600 hover:bg-red-700 text-white"
+          >
+            {isDeleting ? 'Deleting...' : 'Delete'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </>
   )
 }

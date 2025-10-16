@@ -28,7 +28,7 @@ const AvatarFallback: React.FC<{children: React.ReactNode, className?: string}> 
 import { 
   Brain, BookOpen, Heart, TrendingUp, Calendar, Target, Clock, 
   Plus, Search, Filter, ChevronRight, MessageSquare, BarChart3,
-  PlusCircle, Settings, Upload, Sparkles, User
+  PlusCircle, Settings, Upload, Sparkles, User, ChevronLeft
 } from 'lucide-react'
 import AnalyticsPage from './analytics-page'
 import SettingsPage from './settings-client'
@@ -173,6 +173,9 @@ const StatsCard: React.FC<{
 }
 
 export function DashboardContent({ activeSection = 'dashboard', onSectionChange = () => {}, user, memories = sampleMemories, insights = sampleInsights }: DashboardContentProps) {
+  const [currentPage, setCurrentPage] = React.useState(1)
+  const memoriesPerPage = 9
+  
   const getUserInitials = () => {
     if (user?.firstName && user?.lastName) {
       return `${user.firstName[0]}${user.lastName[0]}`
@@ -183,6 +186,12 @@ export function DashboardContent({ activeSection = 'dashboard', onSectionChange 
     }
     return 'U'
   }
+  
+  // Pagination calculations
+  const totalPages = Math.ceil(memories.length / memoriesPerPage)
+  const startIndex = (currentPage - 1) * memoriesPerPage
+  const endIndex = startIndex + memoriesPerPage
+  const currentMemories = memories.slice(startIndex, endIndex)
 
   const renderDashboard = () => (
     <div className="min-h-[calc(100vh-4rem)] flex flex-col p-4 space-y-4">
@@ -425,7 +434,9 @@ export function DashboardContent({ activeSection = 'dashboard', onSectionChange 
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-3xl font-bold">All Memories</h1>
-                <p className="text-muted-foreground">Browse and manage your memory collection</p>
+                <p className="text-muted-foreground">
+                  Browse and manage your memory collection ({memories.length} total)
+                </p>
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm">
@@ -438,11 +449,54 @@ export function DashboardContent({ activeSection = 'dashboard', onSectionChange 
                 </Button>
               </div>
             </div>
+            
+            {/* Memory Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {memories.map((memory) => (
+              {currentMemories.map((memory) => (
                 <MemoryCard key={memory.id} memory={memory} />
               ))}
             </div>
+            
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 mt-8">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="gap-1"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+                
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <Button
+                      key={page}
+                      variant={currentPage === page ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(page)}
+                      className="w-10"
+                    >
+                      {page}
+                    </Button>
+                  ))}
+                </div>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="gap-1"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </div>
         )
       

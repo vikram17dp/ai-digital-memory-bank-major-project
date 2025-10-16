@@ -104,12 +104,12 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
   const totalSteps = 3
   const progress = (currentStep / totalSteps) * 100
 
-  // Fetch saved memories when component mounts
+  // Fetch saved memories when component mounts - Show only 4 most recent
   useEffect(() => {
     const fetchMemories = async () => {
       setIsLoadingMemories(true)
       try {
-        const response = await fetch('/api/memories/list?limit=6')
+        const response = await fetch('/api/memories/list?limit=4')
         const data = await response.json()
         if (data.success) {
           setSavedMemories(data.memories)
@@ -141,13 +141,15 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
     // Show validation errors
     if (invalidFiles.length > 0) {
       toast.error('❌ Invalid file type', {
-        description: 'Please upload only image files (JPG, PNG, GIF, WebP)'
+        description: 'Please upload only image files (JPG, PNG, GIF, WebP)',
+        duration: 2500
       })
     }
     
     if (oversizedFiles.length > 0) {
       toast.error('📦 File too large', {
-        description: 'Please upload images smaller than 5MB'
+        description: 'Please upload images smaller than 5MB',
+        duration: 2500
       })
     }
 
@@ -166,7 +168,8 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
       
       // Show upload success
       toast.success('📸 Image uploaded!', {
-        description: `${filesToProcess.length} image${filesToProcess.length > 1 ? 's' : ''} ready for processing`
+        description: `${filesToProcess.length} image${filesToProcess.length > 1 ? 's' : ''} ready for processing`,
+        duration: 2000
       })
       
       // If AI mode, automatically trigger AI analysis
@@ -204,7 +207,8 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
         
         toast.success('✨ Memory details extracted!', {
           id: 'ai-analysis',
-          description: result.message || `Found details with ${Math.round(result.data.confidence * 100)}% confidence`
+          description: result.message || `Found details with ${Math.round(result.data.confidence * 100)}% confidence`,
+          duration: 2500
         })
         
         // Auto-fill the form with AI results
@@ -222,6 +226,7 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
         // Show success toast for auto-fill
         toast.success('🎯 Form auto-filled!', {
           description: 'You can review and edit the details before saving',
+          duration: 2500,
           action: {
             label: 'Next Step',
             onClick: () => setCurrentStep(2)
@@ -237,7 +242,8 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
       
       toast.error('❌ AI analysis failed', {
         id: 'ai-analysis',
-        description: error instanceof Error ? error.message : 'Please try again or use manual entry'
+        description: error instanceof Error ? error.message : 'Please try again or use manual entry',
+        duration: 2500
       })
       
       // Fallback to manual mode on error
@@ -265,6 +271,7 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
       
       toast.success('✅ AI results applied!', {
         description: 'Proceeding to mood selection step',
+        duration: 2000,
         action: {
           label: 'Continue',
           onClick: () => setCurrentStep(2)
@@ -278,14 +285,16 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
   const retryAIAnalysis = async () => {
     if (formData.images.length > 0) {
       toast.info('🔄 Retrying AI analysis...', {
-        description: 'Analyzing your image again'
+        description: 'Analyzing your image again',
+        duration: 2000
       })
       setAiResults(null)
       setShowAiResults(false)
       await handleAIAnalysis(formData.images[0])
     } else {
       toast.error('⚠️ No image to analyze', {
-        description: 'Please upload an image first'
+        description: 'Please upload an image first',
+        duration: 2500
       })
     }
   }
@@ -306,9 +315,9 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
     if (trimmedTag && !formData.tags.includes(trimmedTag)) {
       setFormData(prev => ({ ...prev, tags: [...prev.tags, trimmedTag] }))
       setNewTag('')
-      toast.success(`🏷️ Tag "${trimmedTag}" added!`)
+      toast.success(`🏷️ Tag "${trimmedTag}" added!`, { duration: 2000 })
     } else if (formData.tags.includes(trimmedTag)) {
-      toast.warning('⚠️ Tag already exists')
+      toast.warning('⚠️ Tag already exists', { duration: 2000 })
     }
   }
 
@@ -317,7 +326,7 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
       ...prev,
       tags: prev.tags.filter(tag => tag !== tagToRemove)
     }))
-    toast.info(`🗑️ Tag "${tagToRemove}" removed`)
+    toast.info(`🗑️ Tag "${tagToRemove}" removed`, { duration: 2000 })
   }
 
   const handleDrag = (e: React.DragEvent) => {
@@ -400,6 +409,7 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
       toast.success('🎉 Memory saved successfully!', {
         id: 'save-memory',
         description: 'Your precious moment has been preserved',
+        duration: 2500,
         action: {
           label: 'View Memory',
           onClick: () => {
@@ -411,9 +421,9 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
         }
       })
       
-      // Refresh memories list
+      // Refresh memories list - Show only 4 most recent
       try {
-        const response = await fetch('/api/memories/list?limit=6')
+        const response = await fetch('/api/memories/list?limit=4')
         const data = await response.json()
         if (data.success) {
           setSavedMemories(data.memories)
@@ -449,7 +459,8 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
       
       toast.error('❌ Failed to save memory', {
         id: 'save-memory',
-        description: error instanceof Error ? error.message : 'Please try again'
+        description: error instanceof Error ? error.message : 'Please try again',
+        duration: 2500
       })
       
     } finally {
@@ -777,7 +788,8 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                           onClick={() => {
                             setShowAiResults(false)
                             toast.info('✏️ Switched to manual editing', {
-                              description: 'You can now edit all fields manually'
+                              description: 'You can now edit all fields manually',
+                              duration: 2000
                             })
                           }}
                           className="bg-white/80 dark:bg-gray-800/80"
@@ -1268,26 +1280,28 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                 </div>
               </div>
 
-              {/* Recent Memories Feed - Instagram/Threads Style */}
+              {/* Recent Memories Preview - Compact */}
               <div className="space-y-3 sm:space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <Label className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center justify-between">
                   <span className="flex items-center gap-1.5 sm:gap-2">
-                    <BookOpen className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                    <span>Your Recent Memories</span>
+                    <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    <span>Recent Memories</span>
                   </span>
-                  <span className="text-xs text-gray-500">
-                    {savedMemories.length} saved
-                  </span>
+                  {savedMemories.length > 0 && (
+                    <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                      Latest {savedMemories.length}
+                    </span>
+                  )}
                 </Label>
 
                 {isLoadingMemories ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
                     {[1, 2, 3, 4].map((i) => (
                       <div key={i} className="aspect-square bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
                     ))}
                   </div>
                 ) : savedMemories.length > 0 ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
                     {savedMemories.map((memory) => (
                       <div 
                         key={memory.id} 
@@ -1334,9 +1348,10 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-6 sm:py-8 text-gray-500 dark:text-gray-400">
+                  <div className="text-center py-6 sm:py-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/30 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-700">
                     <BookOpen className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-2 sm:mb-3 opacity-30" />
-                    <p className="text-xs sm:text-sm px-4">No memories yet. Save this one to get started! 🎉</p>
+                    <p className="text-xs sm:text-sm px-4 font-medium">This will be your first memory!</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Save this one to start building your collection 🎉</p>
                   </div>
                 )}
               </div>
