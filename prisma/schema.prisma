@@ -1,4 +1,3 @@
-// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,6 +7,7 @@ datasource db {
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
+
 model Memory {
   id          String   @id @default(cuid())
   userId      String
@@ -26,10 +26,10 @@ model Memory {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@index([userId, date(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
   @@index([userId, mood])
   @@index([userId, isFavorite])
-  @@map("Memory") 
+  @@map("Memory")
 }
 
 enum Mood {
@@ -38,5 +38,19 @@ enum Mood {
   negative
 }
 
+model UserProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  email           String   @unique
+  bio             String?
+  location        String?
+  website         String?
+  phone           String?
+  timezone        String?
+  profileImage    String?
+  backgroundImage String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-
+  @@map("UserProfile")
+}

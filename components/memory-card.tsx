@@ -145,11 +145,11 @@ export function MemoryCard({ memory, onUpdate }: MemoryCardProps) {
   return (
     <>
     <div 
-      className="glass-card rounded-xl overflow-hidden hover:bg-white/5 dark:hover:bg-white/5 transition-all duration-300 group hover:shadow-xl hover:scale-[1.02]"
+      className="glass-card rounded-xl overflow-hidden hover:bg-white/5 dark:hover:bg-white/5 transition-all duration-300 group hover:shadow-xl hover:scale-[1.02] flex flex-col h-full"
     >
       {/* Image Preview - Full Width */}
       {displayImages.length > 0 && (
-        <div className="relative h-56 w-full overflow-hidden bg-gradient-to-br from-gray-800 to-gray-900">
+        <div className="relative h-56 w-full flex-shrink-0 overflow-hidden bg-gradient-to-br from-gray-800 to-gray-900">
           <img
             src={displayImages[0]}
             alt={memory.title || 'Memory'}
@@ -179,12 +179,12 @@ export function MemoryCard({ memory, onUpdate }: MemoryCardProps) {
         </div>
       )}
 
-      <div className="p-5">
+      <div className="p-5 flex flex-col flex-grow">
       {/* Header with title and actions */}
       <div className="flex items-start justify-between mb-3">
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <Clock className="w-3.5 h-3.5 text-gray-400" />
+            <Clock className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
             <span className="text-xs text-gray-400">{timeAgo}</span>
             {memory.sentiment && (
               <Badge variant="outline" className={`text-xs ${getSentimentBadge(memory.sentiment)}`}>
@@ -193,7 +193,7 @@ export function MemoryCard({ memory, onUpdate }: MemoryCardProps) {
               </Badge>
             )}
           </div>
-          <h3 className="font-montserrat font-semibold text-lg text-white mb-1 line-clamp-2">{memory.title || 'Untitled Memory'}</h3>
+          <h3 className="font-montserrat font-semibold text-lg text-white mb-1 line-clamp-2 break-words">{memory.title || 'Untitled Memory'}</h3>
         </div>
         
         {/* Three Dots Menu */}
@@ -258,28 +258,28 @@ export function MemoryCard({ memory, onUpdate }: MemoryCardProps) {
       </div>
 
       {/* Content */}
-      <p className="font-open-sans text-gray-300 mb-4 line-clamp-3 leading-relaxed text-sm">{memory.content}</p>
+      <p className="font-open-sans text-gray-300 mb-4 line-clamp-3 leading-relaxed text-sm break-words">{memory.content}</p>
 
       {/* Location and People Info */}
       {(memory.location || memory.people) && (
         <div className="flex flex-wrap gap-3 mb-4 text-xs text-gray-400">
           {memory.location && (
-            <div className="flex items-center gap-1">
-              <MapPin className="w-3 h-3" />
-              <span>{memory.location}</span>
+            <div className="flex items-center gap-1 min-w-0">
+              <MapPin className="w-3 h-3 flex-shrink-0" />
+              <span className="truncate">{memory.location}</span>
             </div>
           )}
           {memory.people && (
-            <div className="flex items-center gap-1">
-              <Users className="w-3 h-3" />
-              <span>{memory.people}</span>
+            <div className="flex items-center gap-1 min-w-0">
+              <Users className="w-3 h-3 flex-shrink-0" />
+              <span className="truncate">{memory.people}</span>
             </div>
           )}
         </div>
       )}
 
       {/* Tags */}
-      <div className="flex flex-wrap gap-1.5 mb-4">
+      <div className="flex flex-wrap gap-1.5 mb-4 mt-auto">
         {memory.tags.slice(0, 4).map((tag, index) => (
           <Badge key={index} variant="outline" className="text-xs bg-primary/10 text-primary border-primary/20 px-2 py-0.5">
             #{tag}
