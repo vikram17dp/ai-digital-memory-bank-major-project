@@ -53,6 +53,7 @@ interface AddMemoryFormProps {
   memories?: any[]
   insights?: any
   onSectionChange?: (section: string) => void
+  onMemorySaved?: () => void
 }
 
 const moodOptions = [
@@ -74,7 +75,8 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
   userData,
   memories,
   insights,
-  onSectionChange
+  onSectionChange,
+  onMemorySaved
 }) => {
   const [inputMode, setInputMode] = useState<'manual' | 'ai'>('manual')
   const [currentStep, setCurrentStep] = useState(1)
@@ -523,6 +525,11 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
       setAiResults(null)
       setShowAiResults(false)
       setInputMode('manual')
+      
+      // Call the callback to refresh memories if provided
+      if (onMemorySaved) {
+        onMemorySaved()
+      }
       
       // Redirect to memories page after a short delay
       setTimeout(() => {

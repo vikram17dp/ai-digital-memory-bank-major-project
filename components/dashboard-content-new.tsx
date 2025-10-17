@@ -172,9 +172,38 @@ const StatsCard: React.FC<{
   )
 }
 
-export function DashboardContent({ activeSection = 'dashboard', onSectionChange = () => {}, user, memories = sampleMemories, insights = sampleInsights }: DashboardContentProps) {
+export function DashboardContent({ activeSection = 'dashboard', onSectionChange = () => {}, user, memories: initialMemories = sampleMemories, insights: initialInsights = sampleInsights }: DashboardContentProps) {
   const [currentPage, setCurrentPage] = React.useState(1)
+  const [memories, setMemories] = React.useState<Memory[]>(initialMemories)
+  const [insights, setInsights] = React.useState<Insights>(initialInsights)
+  const [isRefreshing, setIsRefreshing] = React.useState(false)
   const memoriesPerPage = 9
+  
+  // Function to refresh memories from API
+  const refreshMemories = React.useCallback(async () => {
+    if (!user?.id) return
+    
+    setIsRefreshing(true)
+    try {
+      const response = await fetch('/api/memories/list')
+      const data = await response.json()
+      
+      if (data.success) {
+        setMemories(data.memories)
+      }
+    } catch (error) {
+      console.error('Failed to refresh memories:', error)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }, [user?.id])
+  
+  // Refresh memories when switching to memories section
+  React.useEffect(() => {
+    if (activeSection === 'memories' || activeSection === 'dashboard') {
+      refreshMemories()
+    }
+  }, [activeSection, refreshMemories])
   
   const getUserInitials = () => {
     if (user?.firstName && user?.lastName) {
@@ -453,7 +482,7 @@ export function DashboardContent({ activeSection = 'dashboard', onSectionChange 
             {/* Memory Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-fr">
               {currentMemories.map((memory) => (
-                <MemoryCard key={memory.id} memory={memory} />
+                <MemoryCard key={memory.id} memory={memory} onUpdate={refreshMemories} />
               ))}
             </div>
             
@@ -522,7 +551,11 @@ export function DashboardContent({ activeSection = 'dashboard', onSectionChange 
               <h1 className="text-3xl font-bold mb-2">Add New Memory</h1>
               <p className="text-muted-foreground">Capture and preserve your precious moments</p>
             </div>
-            <AddMemoryForm user={user} onSectionChange={onSectionChange} />
+            <AddMemoryForm 
+              user={user} 
+              onSectionChange={onSectionChange} 
+              onMemorySaved={refreshMemories}
+            />
           </div>
         )
       
