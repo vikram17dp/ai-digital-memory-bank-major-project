@@ -100,6 +100,10 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
   const [newTag, setNewTag] = useState('')
   const [savedMemories, setSavedMemories] = useState<any[]>([])
   const [isLoadingMemories, setIsLoadingMemories] = useState(false)
+  const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [isAnalyzingAdditional, setIsAnalyzingAdditional] = useState(false)
+  const [touchStart, setTouchStart] = useState(0)
+  const [touchEnd, setTouchEnd] = useState(0)
 
   const totalSteps = 3
   const progress = (currentStep / totalSteps) * 100
@@ -128,7 +132,7 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
-  const handleImageUpload = async (files: FileList | File[]) => {
+  const handleImageUpload = async (files: FileList | File[], analyzeWithAI: boolean = false) => {
     const fileArray = Array.from(files)
     
     // Validate files
@@ -154,28 +158,85 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
     }
 
     if (validFiles.length > 0) {
-      // For AI mode, only allow one image
-      const filesToProcess = inputMode === 'ai' ? [validFiles[0]] : validFiles
+      // Check image limit (max 10 images)
+      const remainingSlots = 10 - formData.images.length
+      if (remainingSlots <= 0) {
+        toast.error('🚫 Maximum images reached', {
+          description: 'You can upload up to 10 images per memory',
+          duration: 2500
+        })
+        return
+      }
+      
+      const filesToProcess = validFiles.slice(0, remainingSlots)
+      if (validFiles.length > remainingSlots) {
+        toast.warning('⚠️ Some images skipped', {
+          description: `Only ${remainingSlots} image${remainingSlots > 1 ? 's' : ''} added (max 10 total)`,
+          duration: 2500
+        })
+      }
+      
+      // For AI mode in step 1, only allow one image
+      const finalFiles = (inputMode === 'ai' && currentStep === 1) ? [validFiles[0]] : filesToProcess
       
       setFormData(prev => ({ 
         ...prev, 
-        images: inputMode === 'ai' ? filesToProcess : [...prev.images, ...filesToProcess]
+        images: (inputMode === 'ai' && currentStep === 1) ? finalFiles : [...prev.images, ...finalFiles]
       }))
       
       // Create preview URLs
-      const newPreviewUrls = filesToProcess.map(file => URL.createObjectURL(file))
-      setImagePreviewUrls(prev => inputMode === 'ai' ? newPreviewUrls : [...prev, ...newPreviewUrls])
+      const newPreviewUrls = finalFiles.map(file => URL.createObjectURL(file))
+      setImagePreviewUrls(prev => (inputMode === 'ai' && currentStep === 1) ? newPreviewUrls : [...prev, ...newPreviewUrls])
       
       // Show upload success
       toast.success('📸 Image uploaded!', {
-        description: `${filesToProcess.length} image${filesToProcess.length > 1 ? 's' : ''} ready for processing`,
+        description: `${finalFiles.length} image${finalFiles.length > 1 ? 's' : ''} added successfully`,
         duration: 2000
       })
       
-      // If AI mode, automatically trigger AI analysis
-      if (inputMode === 'ai') {
-        await handleAIAnalysis(filesToProcess[0])
+      // If AI mode in step 1, automatically trigger AI analysis
+      if (inputMode === 'ai' && currentStep === 1) {
+        await handleAIAnalysis(finalFiles[0])
+      } else if (analyzeWithAI && finalFiles.length > 0) {
+        // In step 3, optionally analyze additional images
+        setIsAnalyzingAdditional(true)
+        for (const file of finalFiles) {
+          await handleAdditionalImageAnalysis(file)
+        }
+        setIsAnalyzingAdditional(false)
       }
+    }
+  }
+  
+  const handleAdditionalImageAnalysis = async (imageFile: File) => {
+    try {
+      const formDataObj = new FormData()
+      formDataObj.append('image', imageFile)
+      
+      const response = await fetch('/api/memory/extract', {
+        method: 'POST',
+        body: formDataObj
+      })
+      
+      const result = await response.json()
+      
+      if (result.success && result.data) {
+        // Merge new tags with existing ones (avoid duplicates)
+        const newTags = result.data.tags.filter((tag: string) => !formData.tags.includes(tag))
+        if (newTags.length > 0) {
+          setFormData(prev => ({
+            ...prev,
+            tags: [...prev.tags, ...newTags]
+          }))
+          
+          toast.success('✨ Additional details extracted!', {
+            description: `Added ${newTags.length} new tag${newTags.length > 1 ? 's' : ''} from image`,
+            duration: 2000
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Additional image analysis failed:', error)
     }
   }
   
@@ -348,6 +409,37 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
       handleImageUpload(e.dataTransfer.files)
     }
   }
+  
+  // Touch handlers for swipe gestures
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStart(e.targetTouches[0].clientX)
+  }
+  
+  const handleTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX)
+  }
+  
+  const handleTouchEnd = () => {
+    if (!touchStart || !touchEnd) return
+    
+    const distance = touchStart - touchEnd
+    const isLeftSwipe = distance > 50
+    const isRightSwipe = distance < -50
+    
+    if (isLeftSwipe && imagePreviewUrls.length > 1) {
+      // Swipe left - next image
+      setCurrentImageIndex((prev) => (prev === imagePreviewUrls.length - 1 ? 0 : prev + 1))
+    }
+    
+    if (isRightSwipe && imagePreviewUrls.length > 1) {
+      // Swipe right - previous image
+      setCurrentImageIndex((prev) => (prev === 0 ? imagePreviewUrls.length - 1 : prev - 1))
+    }
+    
+    // Reset
+    setTouchStart(0)
+    setTouchEnd(0)
+  }
 
   const handleSubmit = async () => {
     setIsSubmitting(true)
@@ -408,29 +500,9 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
       
       toast.success('🎉 Memory saved successfully!', {
         id: 'save-memory',
-        description: 'Your precious moment has been preserved',
-        duration: 2500,
-        action: {
-          label: 'View Memory',
-          onClick: () => {
-            // Navigate to memory view or memories list
-            if (onSectionChange) {
-              onSectionChange('memories')
-            }
-          }
-        }
+        description: 'Redirecting to memories page...',
+        duration: 2000
       })
-      
-      // Refresh memories list - Show only 4 most recent
-      try {
-        const response = await fetch('/api/memories/list?limit=4')
-        const data = await response.json()
-        if (data.success) {
-          setSavedMemories(data.memories)
-        }
-      } catch (error) {
-        console.error('Failed to refresh memories:', error)
-      }
       
       // Reset form for next memory
       setFormData({
@@ -451,6 +523,13 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
       setAiResults(null)
       setShowAiResults(false)
       setInputMode('manual')
+      
+      // Redirect to memories page after a short delay
+      setTimeout(() => {
+        if (onSectionChange) {
+          onSectionChange('memories')
+        }
+      }, 500)
       
       console.log('Memory saved:', processedMemory)
       
@@ -1113,10 +1192,47 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
             <div className="space-y-6">
               {/* Image Upload Area */}
               <div className="space-y-4">
-                <Label className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  <Image className="inline h-4 w-4 mr-2" />
-                  Photos ({formData.images.length}/5) - Optional
-                </Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                    <Image className="inline h-4 w-4 mr-2" />
+                    Photos ({formData.images.length}/10) - Optional
+                  </Label>
+                  {formData.images.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        setIsAnalyzingAdditional(true)
+                        toast.loading('🧠 Analyzing images with AI...', {
+                          id: 'analyze-additional'
+                        })
+                        for (const file of formData.images) {
+                          await handleAdditionalImageAnalysis(file)
+                        }
+                        setIsAnalyzingAdditional(false)
+                        toast.success('✨ Analysis complete!', {
+                          id: 'analyze-additional',
+                          description: 'Tags and details updated'
+                        })
+                      }}
+                      disabled={isAnalyzingAdditional}
+                      className="bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/30 border-purple-200 dark:border-purple-700 text-purple-700 dark:text-purple-300"
+                    >
+                      {isAnalyzingAdditional ? (
+                        <>
+                          <div className="w-3 h-3 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mr-2" />
+                          Analyzing...
+                        </>
+                      ) : (
+                        <>
+                          <Wand2 className="h-3 w-3 mr-2" />
+                          Analyze with AI
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
                 
                 <div 
                   className={`relative border-2 border-dashed rounded-2xl p-6 transition-all duration-300 hover:border-blue-400 dark:hover:border-blue-500 ${
@@ -1148,7 +1264,7 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                         Add photos to your memory
                       </h3>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        JPG, PNG, GIF up to 5MB each
+                        JPG, PNG, GIF up to 5MB each (max 10 images)
                       </p>
                     </div>
                     
@@ -1158,36 +1274,100 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                       size="sm"
                       onClick={() => fileInputRef.current?.click()}
                       className="bg-white/80 dark:bg-gray-800/80 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-200"
+                      disabled={formData.images.length >= 10}
                     >
                       <Upload className="h-3 w-3 mr-2" />
-                      Choose Files
+                      {formData.images.length >= 10 ? 'Max Images Reached' : 'Choose Files'}
                     </Button>
                   </div>
                 </div>
                 
-                {/* Image Previews */}
+                {/* Image Previews with Slider */}
                 {imagePreviewUrls.length > 0 && (
-                  <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
-                    {imagePreviewUrls.map((url, index) => (
-                      <div key={index} className="relative group">
-                        <div className="aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 shadow-sm">
-                          <img 
-                            src={url} 
-                            alt={`Preview ${index + 1}`} 
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => removeImage(index)}
-                          className="absolute -top-1 -right-1 w-6 h-6 rounded-full p-0 shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
+                  <div className="space-y-3">
+                    {/* Main Image Slider */}
+                    <div 
+                      className="relative aspect-video rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-900 shadow-lg touch-pan-y"
+                      onTouchStart={handleTouchStart}
+                      onTouchMove={handleTouchMove}
+                      onTouchEnd={handleTouchEnd}
+                    >
+                      <img
+                        src={imagePreviewUrls[currentImageIndex]}
+                        alt={`Preview ${currentImageIndex + 1}`}
+                        className="w-full h-full object-cover select-none"
+                        draggable={false}
+                      />
+                      
+                      {/* Navigation Arrows */}
+                      {imagePreviewUrls.length > 1 && (
+                        <>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setCurrentImageIndex((prev) => (prev === 0 ? imagePreviewUrls.length - 1 : prev - 1))}
+                            className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 text-white p-0 backdrop-blur-sm"
+                          >
+                            <ChevronLeft className="h-5 w-5" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setCurrentImageIndex((prev) => (prev === imagePreviewUrls.length - 1 ? 0 : prev + 1))}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 text-white p-0 backdrop-blur-sm"
+                          >
+                            <ChevronRight className="h-5 w-5" />
+                          </Button>
+                        </>
+                      )}
+                      
+                      {/* Image Counter */}
+                      <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2.5 py-1 rounded-full font-medium backdrop-blur-sm">
+                        {currentImageIndex + 1} / {imagePreviewUrls.length}
                       </div>
-                    ))}
+                      
+                      {/* Delete Current Image */}
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => {
+                          removeImage(currentImageIndex)
+                          if (currentImageIndex >= imagePreviewUrls.length - 1) {
+                            setCurrentImageIndex(Math.max(0, imagePreviewUrls.length - 2))
+                          }
+                        }}
+                        className="absolute top-2 left-2 w-8 h-8 rounded-full p-0 shadow-md backdrop-blur-sm"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    
+                    {/* Thumbnail Navigation */}
+                    {imagePreviewUrls.length > 1 && (
+                      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200 dark:scrollbar-thumb-gray-600 dark:scrollbar-track-gray-800">
+                        {imagePreviewUrls.map((url, index) => (
+                          <button
+                            key={index}
+                            type="button"
+                            onClick={() => setCurrentImageIndex(index)}
+                            className={`relative flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden transition-all duration-200 ${
+                              currentImageIndex === index
+                                ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-900 scale-105'
+                                : 'opacity-60 hover:opacity-100'
+                            }`}
+                          >
+                            <img
+                              src={url}
+                              alt={`Thumbnail ${index + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1224,19 +1404,70 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                       )}
                     </div>
 
-                    {/* Image Gallery - Smaller on desktop */}
+                    {/* Image Gallery with Slider - Smaller on desktop */}
                     {imagePreviewUrls.length > 0 && (
-                      <div className="relative aspect-square sm:aspect-[4/3] lg:aspect-video bg-gray-100 dark:bg-gray-900">
+                      <div 
+                        className="relative aspect-square sm:aspect-[4/3] lg:aspect-video bg-gray-100 dark:bg-gray-900 touch-pan-y"
+                        onTouchStart={handleTouchStart}
+                        onTouchMove={handleTouchMove}
+                        onTouchEnd={handleTouchEnd}
+                      >
                         <img 
-                          src={imagePreviewUrls[0]} 
+                          src={imagePreviewUrls[currentImageIndex]} 
                           alt="Memory" 
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover select-none"
+                          draggable={false}
                         />
+                        
+                        {/* Navigation Arrows for Preview */}
                         {imagePreviewUrls.length > 1 && (
-                          <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded-full font-medium">
-                            1/{imagePreviewUrls.length}
-                          </div>
+                          <>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setCurrentImageIndex((prev) => (prev === 0 ? imagePreviewUrls.length - 1 : prev - 1))
+                              }}
+                              className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-sm transition-all"
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setCurrentImageIndex((prev) => (prev === imagePreviewUrls.length - 1 ? 0 : prev + 1))
+                              }}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-sm transition-all"
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </button>
+                            
+                            {/* Dot Indicators */}
+                            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
+                              {imagePreviewUrls.map((_, index) => (
+                                <button
+                                  key={index}
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setCurrentImageIndex(index)
+                                  }}
+                                  className={`w-1.5 h-1.5 rounded-full transition-all ${
+                                    currentImageIndex === index
+                                      ? 'bg-white w-4'
+                                      : 'bg-white/50 hover:bg-white/75'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                          </>
                         )}
+                        
+                        {/* Image Counter */}
+                        <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded-full font-medium backdrop-blur-sm">
+                          {currentImageIndex + 1}/{imagePreviewUrls.length}
+                        </div>
                       </div>
                     )}
 

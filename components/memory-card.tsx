@@ -167,15 +167,11 @@ export function MemoryCard({ memory, onUpdate }: MemoryCardProps) {
               <Star className="w-3.5 h-3.5 text-white fill-white" />
             </div>
           )}
-          {/* View Button Overlay */}
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all duration-300 flex items-center justify-center">
-            <Button
-              onClick={() => setIsModalOpen(true)}
-              className="opacity-100 transform scale-100 transition-all duration-300 bg-primary hover:bg-primary/90 text-white font-medium px-6 py-2 rounded-lg shadow-lg"
-            >
-              View Details
-            </Button>
-          </div>
+          {/* Clickable Overlay */}
+          <div 
+            className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-300 cursor-pointer"
+            onClick={() => setIsModalOpen(true)}
+          />
         </div>
       )}
 
@@ -292,15 +288,12 @@ export function MemoryCard({ memory, onUpdate }: MemoryCardProps) {
         )}
       </div>
 
-      {/* Action Button - Always Visible */}
+      {/* Make card clickable if no images */}
       {!displayImages.length && (
-        <Button
+        <div 
+          className="absolute inset-0 cursor-pointer" 
           onClick={() => setIsModalOpen(true)}
-          className="w-full bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 transition-all duration-300"
-          variant="outline"
-        >
-          View Details
-        </Button>
+        />
       )}
       </div>
     </div>
