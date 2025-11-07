@@ -1,15 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { auth } from "@clerk/nextjs/server"
 import { prisma } from "@/lib/prisma"
 import { mlService } from "@/lib/ml-service"
 
-export async function GET() {
-  try {
-    const { userId } = await auth() // Added 'await' here
+export const dynamic = 'force-dynamic';
 
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+export async function GET(request: NextRequest) {
+  try {
+    const userId = request.headers.get('x-user-id') || 'anonymous';
 
     const memories = await prisma.memory.findMany({
       where: {
@@ -31,12 +28,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await auth() // Added 'await' here
-
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
+    const userId = request.headers.get('x-user-id') || 'anonymous';
     const { title, content, tags, imageUrl } = await request.json()
 
     // Get user from database

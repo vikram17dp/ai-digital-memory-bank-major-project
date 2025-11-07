@@ -1,23 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { auth } from "@clerk/nextjs/server"
 import { prisma } from "@/lib/prisma"
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    const { userId } = await auth()
-
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Get user email from Clerk
-    const { clerkClient } = await import("@clerk/nextjs/server")
-    const user = await (await clerkClient()).users.getUser(userId)
-    const email = user?.emailAddresses?.[0]?.emailAddress
-
-    if (!email) {
-      return NextResponse.json({ error: "User email not found" }, { status: 400 })
-    }
+    const userId = request.headers.get('x-user-id') || 'anonymous';
+    const email = request.headers.get('x-user-email') || 'anonymous@example.com';
 
     // Fetch or create user profile
     let userProfile = await prisma.userProfile.findUnique({
@@ -180,12 +169,7 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const { userId } = await auth()
-
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
+    const userId = request.headers.get('x-user-id') || 'anonymous';
     const body = await request.json()
     const { email, bio, location, website, phone, timezone } = body
 
@@ -231,3 +215,4 @@ export async function PUT(request: NextRequest) {
     )
   }
 }
+

@@ -1,13 +1,34 @@
 'use client';
 
 import React from 'react';
+import { useClerk } from '@clerk/nextjs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Settings, Bell, Shield, User, Moon, Download } from 'lucide-react';
+import { Settings, Bell, Shield, User, Moon, Download, LogOut } from 'lucide-react';
+import { useToast } from "@/hooks/use-toast";
 
 export default function SettingsClient() {
+  const { signOut } = useClerk();
+  const { toast } = useToast();
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      toast({
+        title: "Logged out",
+        description: "You have been successfully logged out",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to log out",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="mb-6">
@@ -105,6 +126,27 @@ export default function SettingsClient() {
             </Button>
             <Button variant="outline" className="w-full">
               Download Backup
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Account Actions */}
+        <Card className="border-red-200 dark:border-red-900">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
+              <LogOut className="h-5 w-5" />
+              Account Actions
+            </CardTitle>
+            <CardDescription>Manage your session</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button 
+              variant="destructive" 
+              className="w-full flex items-center gap-2"
+              onClick={handleLogout}
+            >
+              <LogOut className="h-4 w-4" />
+              Sign Out
             </Button>
           </CardContent>
         </Card>

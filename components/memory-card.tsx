@@ -1,7 +1,7 @@
 "use client"
 
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Heart, Meh, Frown, MessageCircle, MoreHorizontal, MapPin, Users, Image as ImageIcon, X, Star, Clock, Trash2, Edit } from "lucide-react"
+import { Calendar, Heart, Meh, Frown, MessageCircle, MoreHorizontal, MapPin, Users, Image as ImageIcon, X, Star, Clock, Trash2, Edit, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
@@ -29,6 +29,7 @@ export function MemoryCard({ memory, onUpdate }: MemoryCardProps) {
   const [isFavorite, setIsFavorite] = useState(memory.isFavorite)
   const [isTogglingFavorite, setIsTogglingFavorite] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [cardImageIndex, setCardImageIndex] = useState(0)
 
   useEffect(() => {
     const date = new Date(memory.createdAt)
@@ -72,6 +73,14 @@ export function MemoryCard({ memory, onUpdate }: MemoryCardProps) {
 
   const hasImages = memory.images && memory.images.length > 0
   const displayImages = hasImages ? memory.images : (memory.imageUrl ? [memory.imageUrl] : [])
+  
+  // Debug logging
+  useEffect(() => {
+    console.log(`[Memory Card] ID: ${memory.id}, Title: ${memory.title}`);
+    console.log(`[Memory Card] images array:`, memory.images);
+    console.log(`[Memory Card] imageUrl:`, memory.imageUrl);
+    console.log(`[Memory Card] displayImages (${displayImages.length}):`, displayImages);
+  }, [memory.id, memory.images, memory.imageUrl, displayImages])
 
   const handleToggleFavorite = async () => {
     setIsTogglingFavorite(true)
@@ -151,15 +160,39 @@ export function MemoryCard({ memory, onUpdate }: MemoryCardProps) {
       {displayImages.length > 0 && (
         <div className="relative h-56 w-full flex-shrink-0 overflow-hidden bg-gradient-to-br from-gray-800 to-gray-900">
           <img
-            src={displayImages[0]}
+            src={displayImages[cardImageIndex]}
             alt={memory.title || 'Memory'}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           />
+          {/* Navigation Arrows - Only show if multiple images */}
           {displayImages.length > 1 && (
-            <div className="absolute bottom-3 right-3 bg-black/70 backdrop-blur-sm px-2.5 py-1.5 rounded-full text-xs text-white flex items-center gap-1.5">
-              <ImageIcon className="w-3.5 h-3.5" />
-              <span className="font-medium">{displayImages.length}</span>
-            </div>
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setCardImageIndex((prev) => (prev - 1 + displayImages.length) % displayImages.length)
+                }}
+                className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition-all z-20 opacity-0 group-hover:opacity-100"
+                aria-label="Previous image"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setCardImageIndex((prev) => (prev + 1) % displayImages.length)
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition-all z-20 opacity-0 group-hover:opacity-100"
+                aria-label="Next image"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              {/* Image Counter */}
+              <div className="absolute bottom-3 right-3 bg-black/70 backdrop-blur-sm px-2.5 py-1.5 rounded-full text-xs text-white flex items-center gap-1.5">
+                <ImageIcon className="w-3.5 h-3.5" />
+                <span className="font-medium">{cardImageIndex + 1}/{displayImages.length}</span>
+              </div>
+            </>
           )}
           {/* Favorite Star - Top Right */}
           {isFavorite && (

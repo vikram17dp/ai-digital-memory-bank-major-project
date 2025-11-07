@@ -1,16 +1,22 @@
+"use client"
 
-// app/page.tsx
+import { useEffect } from 'react';
 import { SignInButton, SignUpButton } from '@clerk/nextjs';
-import { currentUser } from '@clerk/nextjs/server';
-import { redirect } from 'next/navigation';
+import { useUser } from '@clerk/nextjs';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 
-export default async function HomePage() {
-  const user = await currentUser();
+export default function HomePage() {
+  const { isLoaded, isSignedIn } = useUser();
+  const router = useRouter();
 
-  if (user) {
-    redirect('/dashboard');
-  }
+  useEffect(() => {
+    if (isLoaded && isSignedIn) {
+      router.push('/dashboard');
+    }
+  }, [isLoaded, isSignedIn, router]);
+
+  if (!isLoaded) return null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 relative overflow-hidden">

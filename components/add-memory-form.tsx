@@ -98,31 +98,40 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
   const [showAiResults, setShowAiResults] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [newTag, setNewTag] = useState('')
+  const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [savedMemories, setSavedMemories] = useState<any[]>([])
   const [isLoadingMemories, setIsLoadingMemories] = useState(false)
+  const [memoriesPage, setMemoriesPage] = useState(1)
+  const memoriesPerPage = 8
 
   const totalSteps = 3
   const progress = (currentStep / totalSteps) * 100
 
-  // Fetch saved memories when component mounts - Show only 4 most recent
+  // Fetch saved memories when component mounts - Show user's memories with pagination
   useEffect(() => {
-    const fetchMemories = async () => {
-      setIsLoadingMemories(true)
-      try {
-        const response = await fetch('/api/memories/list?limit=4')
-        const data = await response.json()
-        if (data.success) {
-          setSavedMemories(data.memories)
-        }
-      } catch (error) {
-        console.error('Failed to fetch memories:', error)
-      } finally {
-        setIsLoadingMemories(false)
-      }
+    if (user?.id) {
+      fetchMemories()
     }
-    
-    fetchMemories()
-  }, [])
+  }, [user?.id, memoriesPage])
+
+  const fetchMemories = async () => {
+    setIsLoadingMemories(true)
+    try {
+      const response = await fetch(`/api/memories/list?limit=${memoriesPerPage}&offset=${(memoriesPage - 1) * memoriesPerPage}`, {
+        headers: {
+          'x-user-id': user?.id || '',
+        },
+      })
+      const data = await response.json()
+      if (data.success) {
+        setSavedMemories(data.memories)
+      }
+    } catch (error) {
+      console.error('Failed to fetch memories:', error)
+    } finally {
+      setIsLoadingMemories(false)
+    }
+  }
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }))
@@ -130,11 +139,33 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
 
   const handleImageUpload = async (files: FileList | File[]) => {
     const fileArray = Array.from(files)
+    const currentImageCount = formData.images.length
+    const MAX_IMAGES = 5
+    
+    // Check if adding these files would exceed the limit
+    if (currentImageCount >= MAX_IMAGES) {
+      toast.error('🖼️ Maximum images reached', {
+        description: `You can only upload up to ${MAX_IMAGES} images per memory`,
+        duration: 3000
+      })
+      return
+    }
+    
+    // Calculate how many more images can be added
+    const remainingSlots = MAX_IMAGES - currentImageCount
+    const filesToValidate = fileArray.slice(0, remainingSlots)
+    
+    if (fileArray.length > remainingSlots) {
+      toast.error(`🖼️ Too many images`, {
+        description: `You can only add ${remainingSlots} more image${remainingSlots === 1 ? '' : 's'} (max ${MAX_IMAGES} total)`,
+        duration: 3000
+      })
+    }
     
     // Validate files
-    const invalidFiles = fileArray.filter(file => !file.type.startsWith('image/'))
-    const oversizedFiles = fileArray.filter(file => file.size > 5 * 1024 * 1024)
-    const validFiles = fileArray.filter(file => 
+    const invalidFiles = filesToValidate.filter(file => !file.type.startsWith('image/'))
+    const oversizedFiles = filesToValidate.filter(file => file.size > 5 * 1024 * 1024)
+    const validFiles = filesToValidate.filter(file => 
       file.type.startsWith('image/') && file.size <= 5 * 1024 * 1024 // 5MB limit
     )
 
@@ -154,26 +185,29 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
     }
 
     if (validFiles.length > 0) {
-      // For AI mode, only allow one image
-      const filesToProcess = inputMode === 'ai' ? [validFiles[0]] : validFiles
+      // In Step 3, always allow multiple images. In Step 1 AI mode, only one.
+      const isStep3 = currentStep === 3
+      const filesToProcess = (inputMode === 'ai' && !isStep3) ? [validFiles[0]] : validFiles
       
       setFormData(prev => ({ 
         ...prev, 
-        images: inputMode === 'ai' ? filesToProcess : [...prev.images, ...filesToProcess]
+        images: (inputMode === 'ai' && !isStep3) ? filesToProcess : [...prev.images, ...filesToProcess]
       }))
       
       // Create preview URLs
       const newPreviewUrls = filesToProcess.map(file => URL.createObjectURL(file))
-      setImagePreviewUrls(prev => inputMode === 'ai' ? newPreviewUrls : [...prev, ...newPreviewUrls])
+      setImagePreviewUrls(prev => (inputMode === 'ai' && !isStep3) ? newPreviewUrls : [...prev, ...newPreviewUrls])
+      
+      console.log('[Image Upload] Added images:', filesToProcess.length, 'Total now:', currentImageCount + filesToProcess.length)
       
       // Show upload success
       toast.success('📸 Image uploaded!', {
-        description: `${filesToProcess.length} image${filesToProcess.length > 1 ? 's' : ''} ready for processing`,
+        description: `${filesToProcess.length} image${filesToProcess.length > 1 ? 's' : ''} added (${currentImageCount + filesToProcess.length}/${MAX_IMAGES})`,
         duration: 2000
       })
       
-      // If AI mode, automatically trigger AI analysis
-      if (inputMode === 'ai') {
+      // If AI mode AND Step 1, automatically trigger AI analysis
+      if (inputMode === 'ai' && !isStep3) {
         await handleAIAnalysis(filesToProcess[0])
       }
     }
@@ -308,6 +342,14 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
       URL.revokeObjectURL(prev[index]) // Clean up memory
       return prev.filter((_, i) => i !== index)
     })
+    // Reset to first image if current index is out of bounds
+    setCurrentImageIndex(prevIndex => {
+      if (prevIndex >= imagePreviewUrls.length - 1) {
+        return Math.max(0, imagePreviewUrls.length - 2)
+      }
+      return prevIndex
+    })
+    toast.success('🗑️ Image removed', { duration: 2000 })
   }
 
   const addTag = (tag: string) => {
@@ -377,7 +419,10 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
       // Determine processing mode based on form data
       let mode = inputMode // Use the current input mode
       
+      console.log('[Add Memory] Submitting memory for user:', user?.id)
+      
       submitFormData.append('mode', mode)
+      submitFormData.append('userId', user?.id || '')
       submitFormData.append('title', formData.title)
       submitFormData.append('content', formData.content)
       submitFormData.append('mood', formData.mood)
@@ -389,7 +434,9 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
       submitFormData.append('isFavorite', formData.isFavorite.toString())
       
       // Add images
+      console.log(`[Add Memory] Submitting ${formData.images.length} images to API`)
       formData.images.forEach((image, index) => {
+        console.log(`[Add Memory] Adding image_${index}: ${image.name} (${image.size} bytes)`)
         submitFormData.append(`image_${index}`, image)
       })
       
@@ -408,29 +455,9 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
       
       toast.success('🎉 Memory saved successfully!', {
         id: 'save-memory',
-        description: 'Your precious moment has been preserved',
-        duration: 2500,
-        action: {
-          label: 'View Memory',
-          onClick: () => {
-            // Navigate to memory view or memories list
-            if (onSectionChange) {
-              onSectionChange('memories')
-            }
-          }
-        }
+        description: 'Redirecting to your memories...',
+        duration: 1500
       })
-      
-      // Refresh memories list - Show only 4 most recent
-      try {
-        const response = await fetch('/api/memories/list?limit=4')
-        const data = await response.json()
-        if (data.success) {
-          setSavedMemories(data.memories)
-        }
-      } catch (error) {
-        console.error('Failed to refresh memories:', error)
-      }
       
       // Reset form for next memory
       setFormData({
@@ -451,6 +478,13 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
       setAiResults(null)
       setShowAiResults(false)
       setInputMode('manual')
+      
+      // Auto-redirect to memories page after 500ms
+      setTimeout(() => {
+        if (onSectionChange) {
+          onSectionChange('memories')
+        }
+      }, 500)
       
       console.log('Memory saved:', processedMemory)
       
@@ -1224,18 +1258,75 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                       )}
                     </div>
 
-                    {/* Image Gallery - Smaller on desktop */}
+                    {/* Image Gallery with Swipe/Navigation */}
                     {imagePreviewUrls.length > 0 && (
-                      <div className="relative aspect-square sm:aspect-[4/3] lg:aspect-video bg-gray-100 dark:bg-gray-900">
+                      <div className="relative aspect-square sm:aspect-[4/3] lg:aspect-video bg-gray-100 dark:bg-gray-900 group">
                         <img 
-                          src={imagePreviewUrls[0]} 
-                          alt="Memory" 
+                          src={imagePreviewUrls[currentImageIndex]} 
+                          alt={`Memory ${currentImageIndex + 1}`}
                           className="w-full h-full object-cover"
                         />
+                        
+                        {/* Image Counter */}
+                        <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded-full font-medium">
+                          {currentImageIndex + 1}/{imagePreviewUrls.length}
+                        </div>
+                        
+                        {/* Navigation Arrows - Show if more than 1 image */}
                         {imagePreviewUrls.length > 1 && (
-                          <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded-full font-medium">
-                            1/{imagePreviewUrls.length}
-                          </div>
+                          <>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                console.log('[Carousel] Previous clicked, current:', currentImageIndex)
+                                setCurrentImageIndex((prev) => {
+                                  const newIndex = prev === 0 ? imagePreviewUrls.length - 1 : prev - 1
+                                  console.log('[Carousel] New index:', newIndex)
+                                  return newIndex
+                                })
+                              }}
+                              className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full w-8 h-8 opacity-100 transition-opacity z-10"
+                            >
+                              <ChevronLeft className="h-5 w-5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                console.log('[Carousel] Next clicked, current:', currentImageIndex)
+                                setCurrentImageIndex((prev) => {
+                                  const newIndex = prev === imagePreviewUrls.length - 1 ? 0 : prev + 1
+                                  console.log('[Carousel] New index:', newIndex)
+                                  return newIndex
+                                })
+                              }}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full w-8 h-8 opacity-100 transition-opacity z-10"
+                            >
+                              <ChevronRight className="h-5 w-5" />
+                            </Button>
+                            
+                            {/* Dot Indicators */}
+                            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
+                              {imagePreviewUrls.map((_, idx) => (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={() => {
+                                    console.log('[Carousel] Dot clicked, index:', idx)
+                                    setCurrentImageIndex(idx)
+                                  }}
+                                  className={`w-1.5 h-1.5 rounded-full transition-all z-10 ${
+                                    idx === currentImageIndex 
+                                      ? 'bg-white w-4' 
+                                      : 'bg-white/50 hover:bg-white/75'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                          </>
                         )}
                       </div>
                     )}
@@ -1301,6 +1392,7 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                     ))}
                   </div>
                 ) : savedMemories.length > 0 ? (
+                  <>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
                     {savedMemories.map((memory) => (
                       <div 
@@ -1347,6 +1439,29 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                       </div>
                     ))}
                   </div>
+                  {/* Pagination */}
+                  <div className="flex justify-center gap-2 mt-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setMemoriesPage(p => Math.max(1, p - 1))}
+                      disabled={memoriesPage === 1 || isLoadingMemories}
+                    >
+                      Previous
+                    </Button>
+                    <span className="flex items-center px-3 text-sm text-muted-foreground">
+                      Page {memoriesPage}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setMemoriesPage(p => p + 1)}
+                      disabled={savedMemories.length < memoriesPerPage || isLoadingMemories}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                  </>
                 ) : (
                   <div className="text-center py-6 sm:py-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/30 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-700">
                     <BookOpen className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-2 sm:mb-3 opacity-30" />

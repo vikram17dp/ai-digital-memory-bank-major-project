@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { uploadToS3 } from '@/lib/s3';
 import { extractTextFromImage } from '@/lib/aws-s3';
 import { analyzeSentimentHuggingFace, generateContentFromTitle, generateTagsFromContent, expandMemoryContent } from '@/lib/hugging-face';
@@ -7,16 +6,12 @@ import { analyzeSentimentML, processImageML, generateMemoryDataML } from '@/lib/
 import { validateMemoryData, sanitizeInput } from '@/lib/validation';
 import { prisma } from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   try {
-    // Authenticate user
-    const { userId } = await auth();
-
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const formData = await req.formData();
+    const userId = formData.get('userId') as string || 'anonymous';
 
     // Extract form data
     const title = sanitizeInput(formData.get('title') as string || '');
@@ -94,7 +89,7 @@ export async function POST(req: NextRequest) {
     const dbMood = moodMapping[mood.toLowerCase()] || 'neutral';
 
     // Save memory to database
-    console.log('Saving memory to database...');
+    console.log(`Saving memory to database with ${imageUrls.length} images:`, imageUrls);
     const memory = await prisma.memory.create({
       data: {
         userId: userId,
@@ -114,6 +109,7 @@ export async function POST(req: NextRequest) {
     });
 
     console.log(`Memory created successfully with ID: ${memory.id}`);
+    console.log(`Stored images array (${memory.images.length}):`, memory.images);
 
     return NextResponse.json({
       success: true,

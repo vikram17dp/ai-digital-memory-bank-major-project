@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { deleteFromS3 } from '@/lib/s3';
+
+export const dynamic = 'force-dynamic';
 
 // GET - Fetch a specific memory
 export async function GET(
@@ -9,18 +10,13 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { userId } = await auth();
-    
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const { id } = await params;
+    const userId = request.headers.get('x-user-id');
 
     const memory = await prisma.memory.findUnique({
       where: {
         id: id,
-        userId: userId, // Ensure user can only access their own memories
+        ...(userId && { userId }), // Filter by userId if provided
       },
     });
 
@@ -41,21 +37,16 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { userId } = await auth();
-    
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const { id } = await params;
     const body = await request.json();
     const { title, content, tags, mood, location, people, images, imageUrl, sentiment, isFavorite, isPrivate } = body;
+    const userId = request.headers.get('x-user-id');
 
-    // Verify the memory belongs to the user
+    // Verify the memory exists
     const existingMemory = await prisma.memory.findUnique({
       where: {
         id: id,
-        userId: userId,
+        ...(userId && { userId }),
       },
     });
 
@@ -101,19 +92,14 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { userId } = await auth();
-    
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const { id } = await params;
+    const userId = request.headers.get('x-user-id');
 
-    // Verify the memory belongs to the user and get image URLs
+    // Verify the memory exists and get image URLs
     const existingMemory = await prisma.memory.findUnique({
       where: {
         id: id,
-        userId: userId,
+        ...(userId && { userId }),
       },
     });
 

@@ -46,73 +46,7 @@ interface SearchInterfaceProps {
   onSectionChange?: (section: string) => void
 }
 
-const mockMemories = [
-  {
-    id: 1,
-    title: "Summer Vacation in Bali",
-    content: "An amazing trip with family to Bali. We visited beautiful temples, enjoyed the beaches, and had incredible local food. The sunset at Tanah Lot was absolutely breathtaking.",
-    mood: "happy",
-    tags: ["travel", "family", "vacation", "beach"],
-    date: "2024-07-15",
-    location: "Bali, Indonesia",
-    people: "Sarah, Mom, Dad",
-    images: 8,
-    isFavorite: true,
-    createdAt: "2024-07-20"
-  },
-  {
-    id: 2,
-    title: "Graduation Day Achievement",
-    content: "Finally graduated with my Computer Science degree! All those late nights studying and working on projects paid off. Mom and Dad were so proud.",
-    mood: "excited",
-    tags: ["achievement", "education", "milestone", "family"],
-    date: "2024-05-22",
-    location: "University Campus",
-    people: "Parents, Friends, Classmates",
-    images: 5,
-    isFavorite: true,
-    createdAt: "2024-05-22"
-  },
-  {
-    id: 3,
-    title: "First Day at New Job",
-    content: "Started my new role as a Software Engineer today. The team seems really welcoming and I'm excited about the projects I'll be working on. Office has a great view of the city.",
-    mood: "excited",
-    tags: ["work", "career", "new-beginning"],
-    date: "2024-08-01",
-    location: "Downtown Office",
-    people: "New colleagues, Manager",
-    images: 2,
-    isFavorite: false,
-    createdAt: "2024-08-01"
-  },
-  {
-    id: 4,
-    title: "Weekend Hiking Adventure",
-    content: "Hiked the mountain trail with Alex and Jake. The view from the top was incredible. We packed lunch and spent hours just enjoying nature and good conversation.",
-    mood: "happy",
-    tags: ["adventure", "nature", "friends", "outdoor"],
-    date: "2024-06-10",
-    location: "Mountain Trail",
-    people: "Alex, Jake",
-    images: 12,
-    isFavorite: false,
-    createdAt: "2024-06-10"
-  },
-  {
-    id: 5,
-    title: "Cooking Disaster with Friends",
-    content: "Tried to make a fancy dinner for friends but completely burned the main course. We ended up ordering pizza and laughing about it all night. Sometimes the best memories come from failures.",
-    mood: "neutral",
-    tags: ["friends", "cooking", "funny", "food"],
-    date: "2024-03-15",
-    location: "My Kitchen",
-    people: "Emma, Tom, Lisa",
-    images: 3,
-    isFavorite: false,
-    createdAt: "2024-03-15"
-  }
-]
+// Mock memories removed - using real data from API
 
 const filterOptions = {
   mood: [
@@ -137,13 +71,7 @@ const filterOptions = {
   ]
 }
 
-const recentSearches = [
-  "vacation photos",
-  "work achievements",
-  "family moments",
-  "travel memories",
-  "birthday celebrations"
-]
+// Recent searches will be generated dynamically from user's actual searches
 
 export const SearchInterface: React.FC<SearchInterfaceProps> = ({
   user,
@@ -155,6 +83,8 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
   const [searchQuery, setSearchQuery] = useState('')
   const [isSearching, setIsSearching] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
+  const [apiMemories, setApiMemories] = useState<any[]>([])
+  const [isLoadingMemories, setIsLoadingMemories] = useState(false)
   const [filters, setFilters] = useState({
     mood: '',
     timeRange: 'all',
@@ -165,20 +95,64 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
     favoritesOnly: false
   })
   const [sortBy, setSortBy] = useState('date-desc')
-  const actualMemories = memories || mockMemories
-  const [searchResults, setSearchResults] = useState(actualMemories)
+  const actualMemories = memories || apiMemories
+  const [searchResults, setSearchResults] = useState<any[]>([])
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
-  const [searchHistory, setSearchHistory] = useState(recentSearches)
+  const [searchHistory, setSearchHistory] = useState<string[]>([])
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
 
-  // Update search results when memories prop changes
+  // Fetch memories from API if not provided via props
   useEffect(() => {
-    if (memories) {
-      setSearchResults(memories)
+    const fetchMemories = async () => {
+      if (memories) {
+        // Use memories from props if provided
+        setApiMemories(memories)
+        setSearchResults(memories)
+      } else if (user?.id) {
+        // Fetch from API if not provided
+        setIsLoadingMemories(true)
+        try {
+          const response = await fetch('/api/memories/list', {
+            headers: {
+              'x-user-id': user.id,
+            },
+          })
+          const data = await response.json()
+          if (data.success && data.memories) {
+            console.log('[Search] Loaded memories from API:', data.memories.length)
+            setApiMemories(data.memories)
+            setSearchResults(data.memories)
+            
+            // Generate search history from user's actual data
+            const userSearchTerms: string[] = []
+            data.memories.forEach((mem: any) => {
+              // Add unique locations
+              if (mem.location && !userSearchTerms.includes(mem.location)) {
+                userSearchTerms.push(mem.location)
+              }
+              // Add unique tags (first few)
+              if (mem.tags && Array.isArray(mem.tags)) {
+                mem.tags.slice(0, 2).forEach((tag: string) => {
+                  if (!userSearchTerms.includes(tag)) {
+                    userSearchTerms.push(tag)
+                  }
+                })
+              }
+            })
+            // Keep only first 5 unique terms
+            setSearchHistory(userSearchTerms.slice(0, 5))
+          }
+        } catch (error) {
+          console.error('[Search] Failed to fetch memories:', error)
+        } finally {
+          setIsLoadingMemories(false)
+        }
+      }
     }
-  }, [memories])
+    fetchMemories()
+  }, [memories, user?.id])
 
   // Check if date is within time range
   const isWithinTimeRange = (memoryDate: string, timeRange: string) => {
@@ -310,6 +284,8 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
       return () => clearTimeout(searchTimer)
     } else {
       // Apply filters even when no search query
+      console.log('[Search] Filtering with:', { filters, totalMemories: actualMemories.length })
+      
       const filtered = actualMemories.filter(memory => {
         const matchesMood = !filters.mood || memory.mood === filters.mood
         const matchesTags = filters.tags.length === 0 || filters.tags.every(tag => memory.tags.includes(tag))
@@ -319,8 +295,23 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
         const matchesFavorites = !filters.favoritesOnly || memory.isFavorite
         const matchesTimeRange = isWithinTimeRange(memory.date || memory.createdAt, filters.timeRange)
         
+        // Debug individual memory
+        if (filters.location && memory.location) {
+          console.log('[Search] Checking:', {
+            memoryTitle: memory.title,
+            memoryLocation: memory.location,
+            filterLocation: filters.location,
+            matchesLocation,
+            memoryPeople: memory.people,
+            filterPeople: filters.people,
+            matchesPeople
+          })
+        }
+        
         return matchesMood && matchesTags && matchesLocation && matchesPeople && matchesImages && matchesFavorites && matchesTimeRange
       })
+      
+      console.log('[Search] Filtered results:', filtered.length)
       
       // Sort filtered results
       const sorted = [...filtered].sort((a, b) => {
@@ -917,8 +908,23 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
               </div>
             )}
             
+            {/* Loading State */}
+            {isLoadingMemories && (
+              <div className="text-center py-16">
+                <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center animate-pulse">
+                  <Sparkles className="h-12 w-12 text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">
+                  Loading your memories...
+                </h3>
+                <p className="text-gray-600 dark:text-gray-400">
+                  Please wait while we fetch your memories
+                </p>
+              </div>
+            )}
+            
             {/* Search Results */}
-            {!isSearching && searchResults.length > 0 && (
+            {!isSearching && !isLoadingMemories && searchResults.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
                 {searchResults.map((memory, index) => (
                   <div
@@ -935,7 +941,7 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
             )}
             
             {/* No Results */}
-            {!isSearching && searchResults.length === 0 && (
+            {!isSearching && !isLoadingMemories && searchResults.length === 0 && (
               <div className="text-center py-16">
                 <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800 flex items-center justify-center">
                   <Search className="h-12 w-12 text-gray-400" />
