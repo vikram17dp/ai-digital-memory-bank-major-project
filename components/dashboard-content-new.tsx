@@ -9,6 +9,7 @@ import { AddMemoryForm } from "./add-memory-form"
 import SearchInterface from "./search-interface"
 import { ProfileContent } from "./profile-content"
 import { MemoryCard } from "./memory-card"
+import { DashboardContentRefined } from "./dashboard-content-refined"
 // Simple Avatar implementation
 const Avatar: React.FC<{children: React.ReactNode, className?: string}> = ({ children, className }) => (
   <div className={`relative inline-flex shrink-0 overflow-hidden ${className}`}>
@@ -427,7 +428,7 @@ export function DashboardContent({ activeSection = 'dashboard', onSectionChange 
   const renderSection = () => {
     switch (activeSection) {
       case 'dashboard':
-        return renderDashboard()
+        return <DashboardContentRefined user={user} onSectionChange={onSectionChange} />
       
       case 'memories':
         return (

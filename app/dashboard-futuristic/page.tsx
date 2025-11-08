@@ -1,50 +1,52 @@
 "use client"
 
-import { DashboardFuturistic } from "@/components/dashboard-futuristic"
-import { useState } from "react"
+import { DashboardFuturisticV2 } from "@/components/dashboard-futuristic-v2"
+import { MoodProvider, useMood } from "@/contexts/MoodContext"
 import { Button } from "@/components/ui/button"
+import { motion } from "framer-motion"
 
-export default function DashboardFuturisticPage() {
-  const [mood, setMood] = useState<"calm" | "focused" | "positive" | "neutral">("positive")
+function MoodSwitcher() {
+  const { currentMood, setMood } = useMood()
+
+  const moods = [
+    { id: "calm", label: "Calm", color: "bg-cyan-600" },
+    { id: "focused", label: "Focused", color: "bg-violet-600" },
+    { id: "positive", label: "Positive", color: "bg-green-600" },
+    { id: "neutral", label: "Neutral", color: "bg-gray-600" },
+  ] as const
 
   return (
-    <div className="relative">
-      {/* Mood Switcher - For Demo Purposes */}
-      <div className="fixed top-4 right-4 z-50 flex gap-2 bg-black/50 backdrop-blur-xl p-3 rounded-2xl border border-white/10">
-        <Button 
-          size="sm" 
-          onClick={() => setMood("calm")}
-          className={mood === "calm" ? "bg-blue-600" : "bg-white/10"}
+    <motion.div 
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.5 }}
+      className="fixed top-4 right-4 z-50 flex gap-2 bg-black/50 backdrop-blur-xl p-3 rounded-2xl border border-white/10 shadow-2xl"
+    >
+      {moods.map((mood) => (
+        <Button
+          key={mood.id}
+          size="sm"
+          onClick={() => setMood(mood.id)}
+          className={`transition-all duration-300 ${
+            currentMood === mood.id
+              ? `${mood.color} shadow-lg scale-105`
+              : "bg-white/10 hover:bg-white/20"
+          }`}
         >
-          Calm
+          {mood.label}
         </Button>
-        <Button 
-          size="sm" 
-          onClick={() => setMood("focused")}
-          className={mood === "focused" ? "bg-violet-600" : "bg-white/10"}
-        >
-          Focused
-        </Button>
-        <Button 
-          size="sm" 
-          onClick={() => setMood("positive")}
-          className={mood === "positive" ? "bg-green-600" : "bg-white/10"}
-        >
-          Positive
-        </Button>
-        <Button 
-          size="sm" 
-          onClick={() => setMood("neutral")}
-          className={mood === "neutral" ? "bg-gray-600" : "bg-white/10"}
-        >
-          Neutral
-        </Button>
-      </div>
+      ))}
+    </motion.div>
+  )
+}
 
-      <DashboardFuturistic 
-        userName="Vikram" 
-        currentMood={mood}
-      />
-    </div>
+export default function DashboardFuturisticPage() {
+  return (
+    <MoodProvider>
+      <div className="relative">
+        <MoodSwitcher />
+        <DashboardFuturisticV2 userName="Vikram" />
+      </div>
+    </MoodProvider>
   )
 }

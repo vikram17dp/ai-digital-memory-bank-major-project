@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useUser } from "@clerk/nextjs"
+import { MoodProvider } from "@/contexts/MoodContext"
 import { DashboardMainLayout } from "@/components/dashboard-main-layout"
 import { DashboardContent } from "@/components/dashboard-content-new"
+import { Toaster } from "sonner"
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -22,7 +24,6 @@ export default function DashboardPage() {
     if (!user) return
     
     try {
-      console.log('[Dashboard] Syncing user to database:', user.id)
       const response = await fetch('/api/user/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -36,10 +37,10 @@ export default function DashboardPage() {
       
       const data = await response.json()
       if (data.success) {
-        console.log('[Dashboard] User synced successfully:', data.profile)
+        // User synced successfully
       }
     } catch (error) {
-      console.error('[Dashboard] Failed to sync user:', error)
+      // Failed to sync user
     } finally {
       setSyncing(false)
     }
@@ -72,8 +73,16 @@ export default function DashboardPage() {
   }
 
   return (
-    <DashboardMainLayout user={serializableUser}>
-      <DashboardContent />
-    </DashboardMainLayout>
+    <MoodProvider>
+      <Toaster 
+        position="bottom-right"
+        expand={false}
+        richColors
+        closeButton
+      />
+      <DashboardMainLayout user={serializableUser}>
+        <DashboardContent />
+      </DashboardMainLayout>
+    </MoodProvider>
   )
 }

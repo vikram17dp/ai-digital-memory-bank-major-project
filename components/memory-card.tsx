@@ -60,27 +60,35 @@ export function MemoryCard({ memory, onUpdate }: MemoryCardProps) {
     }
   }
 
-  const getSentimentBadge = (sentiment: string | null) => {
+  const getSentimentBadgeStyle = (sentiment: string | null) => {
     switch (sentiment) {
       case "positive":
-        return "bg-green-500/20 text-green-400 border-green-500/30"
+        return {
+          backgroundColor: 'rgba(16, 185, 129, 0.2)',
+          color: '#6EE7B7',
+          border: 'none'
+        }
       case "negative":
-        return "bg-red-500/20 text-red-400 border-red-500/30"
+        return {
+          backgroundColor: 'rgba(244, 63, 94, 0.2)',
+          color: '#FDA4AF',
+          border: 'none'
+        }
       default:
-        return "bg-gray-500/20 text-gray-400 border-gray-500/30"
+        // Use theme accent color for neutral
+        return {
+          backgroundColor: 'var(--accent)',
+          color: '#ffffff',
+          border: 'none'
+        }
     }
   }
 
   const hasImages = memory.images && memory.images.length > 0
   const displayImages = hasImages ? memory.images : (memory.imageUrl ? [memory.imageUrl] : [])
   
-  // Debug logging
-  useEffect(() => {
-    console.log(`[Memory Card] ID: ${memory.id}, Title: ${memory.title}`);
-    console.log(`[Memory Card] images array:`, memory.images);
-    console.log(`[Memory Card] imageUrl:`, memory.imageUrl);
-    console.log(`[Memory Card] displayImages (${displayImages.length}):`, displayImages);
-  }, [memory.id, memory.images, memory.imageUrl, displayImages])
+  // Images display setup
+  // Removed debug logging for production
 
   const handleToggleFavorite = async () => {
     setIsTogglingFavorite(true)
@@ -109,7 +117,7 @@ export function MemoryCard({ memory, onUpdate }: MemoryCardProps) {
       router.refresh()
       
     } catch (error) {
-      console.error('Toggle favorite error:', error)
+      // Error updating favorite status
       toast.error('Failed to update favorite status', { duration: 2500 })
     } finally {
       setIsTogglingFavorite(false)
@@ -141,7 +149,7 @@ export function MemoryCard({ memory, onUpdate }: MemoryCardProps) {
       router.refresh()
       
     } catch (error) {
-      console.error('Delete error:', error)
+      // Error deleting memory
       toast.error('Failed to delete memory', { 
         id: 'delete-memory',
         duration: 2500
@@ -220,7 +228,7 @@ export function MemoryCard({ memory, onUpdate }: MemoryCardProps) {
             <Clock className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
             <span className="text-xs text-gray-400">{timeAgo}</span>
             {memory.sentiment && (
-              <Badge variant="outline" className={`text-xs ${getSentimentBadge(memory.sentiment)}`}>
+              <Badge variant="outline" className="text-xs" style={getSentimentBadgeStyle(memory.sentiment)}>
                 {getSentimentIcon(memory.sentiment)}
                 <span className="ml-1 capitalize">{memory.sentiment}</span>
               </Badge>
@@ -353,7 +361,7 @@ export function MemoryCard({ memory, onUpdate }: MemoryCardProps) {
                   <span>{formattedDate}</span>
                 </div>
                 {memory.sentiment && (
-                  <Badge className={`${getSentimentBadge(memory.sentiment)}`}>
+                  <Badge className="text-xs" style={getSentimentBadgeStyle(memory.sentiment)}>
                     {getSentimentIcon(memory.sentiment)}
                     <span className="ml-1 capitalize">{memory.sentiment}</span>
                   </Badge>

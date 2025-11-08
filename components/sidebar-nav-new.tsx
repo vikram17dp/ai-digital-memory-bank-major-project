@@ -4,6 +4,8 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
+import { useMood } from "@/contexts/MoodContext"
+import { motion, AnimatePresence } from "framer-motion"
 // Simple Avatar implementation  
 const Avatar: React.FC<{children: React.ReactNode, className?: string}> = ({ children, className }) => (
   <div className={`relative inline-flex shrink-0 overflow-hidden rounded-full ${className}`}>
@@ -97,6 +99,7 @@ const navigationItems = [
 
 export function SidebarNav({ activeSection, onSectionChange, isOpen, onClose, className }: SidebarNavProps) {
   const { user } = useUser()
+  const { moodColors } = useMood()
   
   const getUserInitials = () => {
     if (user?.firstName && user?.lastName) {
@@ -112,17 +115,34 @@ export function SidebarNav({ activeSection, onSectionChange, isOpen, onClose, cl
   return (
     <>
       {/* Desktop Sidebar */}
-   <div className={cn(
-  "hidden md:flex w-64 flex-col border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 backdrop-blur-xl h-[calc(100vh-4rem)] overflow-hidden",
-  className
-)}>
+   <div 
+        className={cn(
+          "hidden md:flex w-64 flex-col backdrop-blur-xl h-[calc(100vh-4rem)] overflow-hidden border-r",
+          className
+        )}
+        style={{
+          backgroundColor: 'rgba(11,14,20,0.6)',
+          borderColor: `${moodColors.primary}20`,
+          boxShadow: `0 0 25px ${moodColors.glow}`
+        }}
+      >
 
         {/* User Profile Section */}
-        <div className="p-4 border-b border-gray-700/30 flex-shrink-0">
+        <div 
+          className="p-4 border-b flex-shrink-0"
+          style={{ borderColor: `${moodColors.primary}20` }}
+        >
           <div className="flex items-center gap-3">
-            <Avatar className="h-8 w-8 ring-2 ring-cyan-500/30">
+            <Avatar className="h-8 w-8 ring-2"
+              style={{ borderColor: `${moodColors.primary}40` }}
+            >
               <AvatarImage src={user?.imageUrl} alt={user?.firstName || 'User'} />
-              <AvatarFallback className="bg-gradient-to-br from-cyan-500 to-blue-600 text-white font-semibold text-xs">
+              <AvatarFallback 
+                className="text-white font-semibold text-xs"
+                style={{
+                  background: `linear-gradient(135deg, ${moodColors.primary}, ${moodColors.secondary})`
+                }}
+              >
                 {getUserInitials()}
               </AvatarFallback>
             </Avatar>
@@ -151,18 +171,29 @@ export function SidebarNav({ activeSection, onSectionChange, isOpen, onClose, cl
                   className={cn(
                     "w-full justify-start h-10 text-left font-normal transition-all duration-300 mb-1 rounded-xl",
                     isActive 
-                      ? `bg-gradient-to-r ${item.gradient} text-white shadow-lg hover:shadow-xl` 
-                      : "text-gray-400 hover:text-white hover:bg-gray-800/50"
+                      ? "text-white"
+                      : "text-gray-300 hover:text-white hover:bg-white/5"
                   )}
+                  style={{
+                    background: isActive 
+                      ? `linear-gradient(135deg, ${moodColors.primary}40, ${moodColors.secondary}40)`
+                      : 'transparent',
+                    boxShadow: isActive ? `0 6px 24px ${moodColors.glow}` : 'none',
+                    border: `1px solid ${moodColors.primary}25`
+                  }}
                   onClick={() => onSectionChange(item.id)}
                 >
                   <div className="flex items-center gap-2 w-full">
-                    <div className={cn(
-                      "flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-300",
-                      isActive 
-                        ? "bg-white/20 text-white shadow-md" 
-                        : `bg-gradient-to-br ${item.gradient} text-white opacity-80 group-hover:opacity-100`
-                    )}>
+                    <div 
+                      className={cn(
+                        "flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-300",
+                        isActive ? "text-white" : "text-white"
+                      )}
+                      style={{
+                        background: `linear-gradient(135deg, ${moodColors.primary}, ${moodColors.secondary})`,
+                        boxShadow: isActive ? `0 0 16px ${moodColors.glow}` : 'none'
+                      }}
+                    >
                       <Icon className="h-4 w-4" />
                     </div>
                     <div className="flex flex-col items-start flex-1 min-w-0">
@@ -185,10 +216,16 @@ export function SidebarNav({ activeSection, onSectionChange, isOpen, onClose, cl
         
         {/* Compact Pro Tip Section */}
         <div className="px-3 py-2 flex-shrink-0">
-          <div className="bg-gradient-to-br from-purple-900/30 to-blue-900/30 border border-purple-500/20 rounded-lg p-2">
+          <div 
+            className="rounded-lg p-2 border"
+            style={{
+              background: `${moodColors.primary}10`,
+              borderColor: `${moodColors.primary}25`
+            }}
+          >
             <div className="flex items-center gap-1 mb-1">
-              <Sparkles className="h-3 w-3 text-purple-400" />
-              <span className="text-purple-300 font-medium text-xs">Pro Tip</span>
+              <Sparkles className="h-3 w-3" style={{ color: moodColors.primary }} />
+              <span className="font-medium text-xs" style={{ color: moodColors.primary }}>Pro Tip</span>
             </div>
             <p className="text-gray-300 text-xs leading-tight">
               Use tags when creating memories to make them easier to find and analyze later!
@@ -197,7 +234,7 @@ export function SidebarNav({ activeSection, onSectionChange, isOpen, onClose, cl
         </div>
         
         {/* Compact Bottom Section */}
-        <div className="border-t border-gray-700/30 p-2 space-y-1 flex-shrink-0">
+        <div className="border-t p-2 space-y-1 flex-shrink-0" style={{ borderColor: `${moodColors.primary}20` }}>
           <Button
             variant="ghost"
             className={cn(
@@ -253,25 +290,65 @@ export function SidebarNav({ activeSection, onSectionChange, isOpen, onClose, cl
       </div>
 
       {/* Mobile Sidebar Overlay */}
+      <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 md:hidden">
+        <motion.div 
+          className="fixed inset-0 z-50 md:hidden"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+        >
           {/* Backdrop */}
           <div 
-            className="absolute inset-0 bg-background/80 backdrop-blur-sm" 
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm" 
             onClick={onClose}
           />
           
           {/* Sidebar */}
-          <div className="relative flex h-full w-64 flex-col border-r border-gray-700/30 bg-gray-900/95 backdrop-blur-xl">
-            {/* Close Button */}
-            <div className="flex items-center justify-end p-4">
-              <Button variant="ghost" size="sm" onClick={onClose}>
-                <X className="h-4 w-4" />
+          <motion.div 
+            className="relative flex h-full w-64 flex-col border-r backdrop-blur-xl shadow-2xl"
+            style={{
+              backgroundColor: 'rgba(11,14,20,0.95)',
+              borderColor: `${moodColors.primary}20`
+            }}
+            initial={{ x: -256 }}
+            animate={{ x: 0 }}
+            exit={{ x: -256 }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+          >
+            {/* Header with Close Button and User Info */}
+            <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: `${moodColors.primary}20` }}>
+              <div className="flex items-center gap-3">
+                <Avatar className="h-10 w-10 ring-2"
+                  style={{ borderColor: `${moodColors.primary}40` }}
+                >
+                  <AvatarImage src={user?.imageUrl} alt={user?.firstName || 'User'} />
+                  <AvatarFallback 
+                    className="text-white font-semibold text-sm"
+                    style={{
+                      background: `linear-gradient(135deg, ${moodColors.primary}, ${moodColors.secondary})`
+                    }}
+                  >
+                    {getUserInitials()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-gray-300 truncate">
+                    Welcome back,
+                  </p>
+                  <p className="text-sm text-white font-medium truncate">
+                    {user?.firstName || 'Vikram'}
+                  </p>
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" onClick={onClose} className="text-white">
+                <X className="h-5 w-5" />
               </Button>
             </div>
             
-            <ScrollArea className="flex-1 px-3">
-              <div className="space-y-1">
+            <ScrollArea className="flex-1 px-3 py-4">
+              <div className="space-y-2">
                 {navigationItems.map((item) => {
                   const Icon = item.icon
                   const isActive = activeSection === item.id
@@ -279,37 +356,42 @@ export function SidebarNav({ activeSection, onSectionChange, isOpen, onClose, cl
                   return (
                     <Button
                       key={item.id}
-                      variant={isActive ? "secondary" : "ghost"}
+                      variant="ghost"
                       className={cn(
-                        "w-full justify-start h-12 text-left font-normal",
-                        isActive && "bg-primary/10 text-primary border-primary/20 border",
-                        !isActive && "hover:bg-muted/50 hover:text-foreground text-muted-foreground"
+                        "w-full justify-start h-14 text-left font-normal transition-all duration-300 rounded-xl",
+                        isActive 
+                          ? "text-white"
+                          : "text-gray-300 hover:text-white hover:bg-white/5"
                       )}
+                      style={{
+                        background: isActive 
+                          ? `linear-gradient(135deg, ${moodColors.primary}40, ${moodColors.secondary}40)`
+                          : 'transparent',
+                        boxShadow: isActive ? `0 6px 24px ${moodColors.glow}` : 'none',
+                        border: `1px solid ${moodColors.primary}25`
+                      }}
                       onClick={() => {
                         onSectionChange(item.id)
                         onClose?.()
                       }}
                     >
                       <div className="flex items-center gap-3 w-full">
-                        <div className={cn(
-                          "flex h-8 w-8 items-center justify-center rounded-lg",
-                          isActive 
-                            ? "bg-primary/20 text-primary" 
-                            : "bg-muted/50 text-muted-foreground"
-                        )}>
-                          <Icon className="h-4 w-4" />
+                        <div 
+                          className="flex h-9 w-9 items-center justify-center rounded-lg"
+                          style={{
+                            background: `linear-gradient(135deg, ${moodColors.primary}, ${moodColors.secondary})`,
+                            boxShadow: isActive ? `0 0 16px ${moodColors.glow}` : 'none'
+                          }}
+                        >
+                          <Icon className="h-5 w-5 text-white" />
                         </div>
                         <div className="flex flex-col items-start flex-1">
-                          <div className="flex items-center justify-between w-full">
-                            <span className="text-sm font-medium">{item.label}</span>
-                            {item.badge && (
-                              <Badge variant="secondary" className="text-xs h-5">
-                                {item.badge}
-                              </Badge>
-                            )}
-                          </div>
-                          <span className="text-xs text-muted-foreground">{item.description}</span>
+                          <span className="text-sm font-semibold">{item.label}</span>
+                          <span className="text-xs opacity-60">{item.description}</span>
                         </div>
+                        {isActive && (
+                          <div className="w-1 h-6 bg-white/60 rounded-full flex-shrink-0" />
+                        )}
                       </div>
                     </Button>
                   )
@@ -318,29 +400,91 @@ export function SidebarNav({ activeSection, onSectionChange, isOpen, onClose, cl
             </ScrollArea>
             
             {/* Bottom Section */}
-            <div className="border-t border-border/40 p-3">
+            <div className="border-t p-3 space-y-2 flex-shrink-0" style={{ borderColor: `${moodColors.primary}20` }}>
               <Button
                 variant="ghost"
-                className="w-full justify-start h-12 text-left font-normal hover:bg-muted/50"
+                className={cn(
+                  "w-full justify-start h-12 text-left font-normal transition-all duration-300 rounded-xl",
+                  activeSection === "profile"
+                    ? "text-white"
+                    : "text-gray-300 hover:text-white hover:bg-white/5"
+                )}
+                style={{
+                  background: activeSection === "profile"
+                    ? `linear-gradient(135deg, ${moodColors.primary}40, ${moodColors.secondary}40)`
+                    : 'transparent',
+                  boxShadow: activeSection === "profile" ? `0 6px 24px ${moodColors.glow}` : 'none',
+                  border: `1px solid ${moodColors.primary}25`
+                }}
+                onClick={() => {
+                  onSectionChange("profile")
+                  onClose?.()
+                }}
+              >
+                <div className="flex items-center gap-3 w-full">
+                  <div 
+                    className="flex h-9 w-9 items-center justify-center rounded-lg"
+                    style={{
+                      background: `linear-gradient(135deg, ${moodColors.primary}, ${moodColors.secondary})`,
+                      boxShadow: activeSection === "profile" ? `0 0 16px ${moodColors.glow}` : 'none'
+                    }}
+                  >
+                    <User className="h-5 w-5 text-white" />
+                  </div>
+                  <div className="flex flex-col items-start flex-1">
+                    <span className="text-sm font-semibold">Profile</span>
+                    <span className="text-xs opacity-60">Your account</span>
+                  </div>
+                  {activeSection === "profile" && (
+                    <div className="w-1 h-6 bg-white/60 rounded-full flex-shrink-0" />
+                  )}
+                </div>
+              </Button>
+              
+              <Button
+                variant="ghost"
+                className={cn(
+                  "w-full justify-start h-12 text-left font-normal transition-all duration-300 rounded-xl",
+                  activeSection === "settings"
+                    ? "text-white"
+                    : "text-gray-300 hover:text-white hover:bg-white/5"
+                )}
+                style={{
+                  background: activeSection === "settings"
+                    ? `linear-gradient(135deg, ${moodColors.primary}40, ${moodColors.secondary}40)`
+                    : 'transparent',
+                  boxShadow: activeSection === "settings" ? `0 6px 24px ${moodColors.glow}` : 'none',
+                  border: `1px solid ${moodColors.primary}25`
+                }}
                 onClick={() => {
                   onSectionChange("settings")
                   onClose?.()
                 }}
               >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50 text-muted-foreground">
-                    <Settings className="h-4 w-4" />
+                <div className="flex items-center gap-3 w-full">
+                  <div 
+                    className="flex h-9 w-9 items-center justify-center rounded-lg"
+                    style={{
+                      background: `linear-gradient(135deg, ${moodColors.primary}, ${moodColors.secondary})`,
+                      boxShadow: activeSection === "settings" ? `0 0 16px ${moodColors.glow}` : 'none'
+                    }}
+                  >
+                    <Settings className="h-5 w-5 text-white" />
                   </div>
-                  <div className="flex flex-col items-start">
-                    <span className="text-sm font-medium">Settings</span>
-                    <span className="text-xs text-muted-foreground">Preferences</span>
+                  <div className="flex flex-col items-start flex-1">
+                    <span className="text-sm font-semibold">Settings</span>
+                    <span className="text-xs opacity-60">Preferences</span>
                   </div>
+                  {activeSection === "settings" && (
+                    <div className="w-1 h-6 bg-white/60 rounded-full flex-shrink-0" />
+                  )}
                 </div>
               </Button>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </>
   )
 }
