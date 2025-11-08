@@ -1,4 +1,3 @@
-import DOMPurify from 'isomorphic-dompurify';
 import validator from 'validator';
 
 export interface ValidationResult {
@@ -26,19 +25,18 @@ export function sanitizeInput(input: string): string {
     return '';
   }
 
-  // Remove potential XSS vectors
-  let sanitized = DOMPurify.sanitize(input, { 
-    ALLOWED_TAGS: [],
-    ALLOWED_ATTR: [],
-    KEEP_CONTENT: true
-  });
-
-  // Additional sanitization
-  sanitized = sanitized
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // Remove script tags
-    .replace(/javascript:/gi, '') // Remove javascript: URLs
-    .replace(/on\w+\s*=/gi, '') // Remove event handlers
-    .replace(/data:/gi, '') // Remove data URLs
+  // Server-side sanitization without DOM dependency
+  let sanitized = input
+    // Remove HTML tags
+    .replace(/<[^>]*>/g, '')
+    // Remove script tags and content
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    // Remove javascript: URLs
+    .replace(/javascript:/gi, '')
+    // Remove event handlers
+    .replace(/on\w+\s*=/gi, '')
+    // Remove data URLs
+    .replace(/data:/gi, '')
     .trim();
 
   // Normalize whitespace

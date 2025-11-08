@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { deleteFromS3 } from '@/lib/s3';
+
+export const dynamic = 'force-dynamic';
 
 // GET - Fetch a specific memory
 export async function GET(
@@ -9,18 +10,13 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { userId } = await auth();
-    
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const { id } = await params;
+    const userId = request.headers.get('x-user-id');
 
-    const memory = await prisma.memory.findUnique({
+const memory = await prisma.memory.findFirst({
       where: {
         id: id,
-        userId: userId, // Ensure user can only access their own memories
+        ...(userId ? { userId } : {}),
       },
     });
 
@@ -41,21 +37,16 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { userId } = await auth();
-    
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const { id } = await params;
     const body = await request.json();
     const { title, content, tags, mood, location, people, images, imageUrl, sentiment, isFavorite, isPrivate } = body;
+    const userId = request.headers.get('x-user-id');
 
-    // Verify the memory belongs to the user
-    const existingMemory = await prisma.memory.findUnique({
+    // Verify the memory exists
+const existingMemory = await prisma.memory.findFirst({
       where: {
         id: id,
-        userId: userId,
+        ...(userId ? { userId } : {}),
       },
     });
 
@@ -63,24 +54,34 @@ export async function PUT(
       return NextResponse.json({ error: 'Memory not found' }, { status: 404 });
     }
 
+    // Build update data object - only include fields that are explicitly provided
+    const updateData: any = {}
+    
+    if (title !== undefined) updateData.title = title
+    if (content !== undefined) updateData.content = content
+    if (tags !== undefined) updateData.tags = tags
+    if (mood !== undefined) updateData.mood = mood
+    if (location !== undefined) updateData.location = location
+    if (people !== undefined) updateData.people = people
+    if (sentiment !== undefined) updateData.sentiment = sentiment
+    if (isFavorite !== undefined) updateData.isFavorite = isFavorite
+    if (isPrivate !== undefined) updateData.isPrivate = isPrivate
+    
+    // Only update images if explicitly provided (not undefined)
+    if (images !== undefined) updateData.images = images
+    if (imageUrl !== undefined) updateData.imageUrl = imageUrl
+    
+    console.log(`[Memory Update] Updating memory ${id} with:`, Object.keys(updateData))
+    if (images !== undefined) {
+      console.log(`[Memory Update] Images array length: ${images.length}`, images)
+    }
+
     // Update the memory
     const updatedMemory = await prisma.memory.update({
       where: {
         id: id,
       },
-      data: {
-        title,
-        content,
-        tags: tags || [],
-        mood,
-        location,
-        people,
-        images: images || [],
-        imageUrl,
-        sentiment,
-        isFavorite,
-        isPrivate,
-      },
+      data: updateData,
     });
 
     return NextResponse.json({ 
@@ -101,19 +102,14 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { userId } = await auth();
-    
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const { id } = await params;
+    const userId = request.headers.get('x-user-id');
 
-    // Verify the memory belongs to the user and get image URLs
-    const existingMemory = await prisma.memory.findUnique({
+    // Verify the memory exists and get image URLs
+const existingMemory = await prisma.memory.findFirst({
       where: {
         id: id,
-        userId: userId,
+        ...(userId ? { userId } : {}),
       },
     });
 

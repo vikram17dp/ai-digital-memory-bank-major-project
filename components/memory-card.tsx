@@ -1,7 +1,7 @@
 "use client"
 
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Heart, Meh, Frown, MessageCircle, MoreHorizontal, MapPin, Users, Image as ImageIcon, X, Star, Clock, Trash2, Edit } from "lucide-react"
+import { Calendar, Heart, Meh, Frown, MessageCircle, MoreHorizontal, MapPin, Users, Image as ImageIcon, X, Star, Clock, Trash2, Edit, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
@@ -29,6 +29,7 @@ export function MemoryCard({ memory, onUpdate }: MemoryCardProps) {
   const [isFavorite, setIsFavorite] = useState(memory.isFavorite)
   const [isTogglingFavorite, setIsTogglingFavorite] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [cardImageIndex, setCardImageIndex] = useState(0)
 
   useEffect(() => {
     const date = new Date(memory.createdAt)
@@ -72,6 +73,14 @@ export function MemoryCard({ memory, onUpdate }: MemoryCardProps) {
 
   const hasImages = memory.images && memory.images.length > 0
   const displayImages = hasImages ? memory.images : (memory.imageUrl ? [memory.imageUrl] : [])
+  
+  // Debug logging
+  useEffect(() => {
+    console.log(`[Memory Card] ID: ${memory.id}, Title: ${memory.title}`);
+    console.log(`[Memory Card] images array:`, memory.images);
+    console.log(`[Memory Card] imageUrl:`, memory.imageUrl);
+    console.log(`[Memory Card] displayImages (${displayImages.length}):`, displayImages);
+  }, [memory.id, memory.images, memory.imageUrl, displayImages])
 
   const handleToggleFavorite = async () => {
     setIsTogglingFavorite(true)
@@ -151,15 +160,39 @@ export function MemoryCard({ memory, onUpdate }: MemoryCardProps) {
       {displayImages.length > 0 && (
         <div className="relative h-56 w-full flex-shrink-0 overflow-hidden bg-gradient-to-br from-gray-800 to-gray-900">
           <img
-            src={displayImages[0]}
+            src={displayImages[cardImageIndex]}
             alt={memory.title || 'Memory'}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           />
+          {/* Navigation Arrows - Only show if multiple images */}
           {displayImages.length > 1 && (
-            <div className="absolute bottom-3 right-3 bg-black/70 backdrop-blur-sm px-2.5 py-1.5 rounded-full text-xs text-white flex items-center gap-1.5">
-              <ImageIcon className="w-3.5 h-3.5" />
-              <span className="font-medium">{displayImages.length}</span>
-            </div>
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setCardImageIndex((prev) => (prev - 1 + displayImages.length) % displayImages.length)
+                }}
+                className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white w-8 h-8 rounded-full transition-all z-20 opacity-0 group-hover:opacity-100 flex items-center justify-center"
+                aria-label="Previous image"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setCardImageIndex((prev) => (prev + 1) % displayImages.length)
+                }}
+                className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white w-8 h-8 rounded-full transition-all z-20 opacity-0 group-hover:opacity-100 flex items-center justify-center"
+                aria-label="Next image"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              {/* Image Counter */}
+              <div className="absolute bottom-3 right-3 bg-black/70 backdrop-blur-sm px-2.5 py-1.5 rounded-full text-xs text-white flex items-center gap-1.5">
+                <ImageIcon className="w-3.5 h-3.5" />
+                <span className="font-medium">{cardImageIndex + 1}/{displayImages.length}</span>
+              </div>
+            </>
           )}
           {/* Favorite Star - Top Right */}
           {isFavorite && (
@@ -167,11 +200,15 @@ export function MemoryCard({ memory, onUpdate }: MemoryCardProps) {
               <Star className="w-3.5 h-3.5 text-white fill-white" />
             </div>
           )}
-          {/* Clickable Overlay */}
-          <div 
-            className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-300 cursor-pointer"
-            onClick={() => setIsModalOpen(true)}
-          />
+          {/* View Button Overlay */}
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all duration-300 flex items-center justify-center">
+            <Button
+              onClick={() => setIsModalOpen(true)}
+              className="opacity-0 group-hover:opacity-100 transform scale-95 group-hover:scale-100 transition-all duration-300 bg-primary hover:bg-primary/90 text-white font-medium px-6 py-2 rounded-lg shadow-lg"
+            >
+              View Details
+            </Button>
+          </div>
         </div>
       )}
 
@@ -288,12 +325,15 @@ export function MemoryCard({ memory, onUpdate }: MemoryCardProps) {
         )}
       </div>
 
-      {/* Make card clickable if no images */}
+      {/* Action Button - Always Visible */}
       {!displayImages.length && (
-        <div 
-          className="absolute inset-0 cursor-pointer" 
+        <Button
           onClick={() => setIsModalOpen(true)}
-        />
+          className="w-full bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 transition-all duration-300"
+          variant="outline"
+        >
+          View Details
+        </Button>
       )}
       </div>
     </div>
@@ -359,18 +399,20 @@ export function MemoryCard({ memory, onUpdate }: MemoryCardProps) {
                       e.stopPropagation()
                       setCurrentImageIndex((prev) => (prev - 1 + displayImages.length) % displayImages.length)
                     }}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors"
+                    className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white w-12 h-12 rounded-full transition-all z-10 flex items-center justify-center shadow-lg"
+                    aria-label="Previous image"
                   >
-                    ←
+                    <ChevronLeft className="w-5 h-5" />
                   </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
                       setCurrentImageIndex((prev) => (prev + 1) % displayImages.length)
                     }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors"
+                    className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white w-12 h-12 rounded-full transition-all z-10 flex items-center justify-center shadow-lg"
+                    aria-label="Next image"
                   >
-                    →
+                    <ChevronRight className="w-5 h-5" />
                   </button>
                   <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/70 backdrop-blur-sm px-3 py-1 rounded-full text-sm text-white">
                     {currentImageIndex + 1} / {displayImages.length}

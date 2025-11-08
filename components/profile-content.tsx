@@ -79,7 +79,12 @@ export function ProfileContent() {
     const fetchProfileData = async () => {
       try {
         setLoading(true)
-        const response = await fetch("/api/user/profile")
+        const response = await fetch("/api/user/profile", {
+          headers: {
+            'x-user-id': user?.id || '',
+            'x-user-email': user?.emailAddresses?.[0]?.emailAddress || '',
+          },
+        })
         const data = await response.json()
 
         if (data.success) {
@@ -157,12 +162,92 @@ export function ProfileContent() {
     return "U"
   }
 
+  const handleImageUpload = async (file: File, type: "profile" | "background") => {
+    setUploading(type)
+    const uploadToast = toast({
+      title: "Uploading",
+      description: `Uploading ${type} image...`,
+    })
+
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("type", type)
+      formData.append("userId", user?.id || "")
+
+      const response = await fetch("/api/user/upload-image", {
+        method: "POST",
+        body: formData,
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        if (type === "profile") {
+          setProfileData((prev) => ({ ...prev, profileImage: data.imageUrl }))
+        } else {
+          setProfileData((prev) => ({ ...prev, backgroundImage: data.imageUrl }))
+        }
+        toast({
+          title: "Success",
+          description: data.message,
+        })
+      } else {
+        toast({
+          title: "Error",
+          description: data.message || "Failed to upload image",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Upload error:", error)
+      toast({
+        title: "Error",
+        description: "Failed to upload image",
+        variant: "destructive",
+      })
+    } finally {
+      setUploading(null)
+    }
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: "profile" | "background") => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "Error",
+        description: "File size must be less than 5MB",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validate file type
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+      toast({
+        title: "Error",
+        description: "Only JPEG, PNG, WebP, and GIF images are allowed",
+        variant: "destructive",
+      })
+      return
+    }
+
+    handleImageUpload(file, type)
+  }
+
   const handleSave = async () => {
     try {
       setSaving(true)
       const response = await fetch("/api/user/profile", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          'x-user-id': user?.id || '',
+          'x-user-email': user?.emailAddresses?.[0]?.emailAddress || '',
+        },
         body: JSON.stringify({
           email: user.emailAddresses?.[0]?.emailAddress,
           ...formData,
@@ -197,6 +282,16 @@ export function ProfileContent() {
     }
   }
 
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+    setCopied(true)
+    toast({
+      title: "Copied!",
+      description: "Copied to clipboard",
+    })
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   const handleCancel = () => {
     setFormData({
       bio: profileData?.bio || "",
@@ -208,89 +303,9 @@ export function ProfileContent() {
     setIsEditing(false)
   }
 
-  const handleImageUpload = async (type: "profile" | "background", file: File) => {
-    try {
-      setUploading(type)
-
-      const formDataObj = new FormData()
-      formDataObj.append("file", file)
-      formDataObj.append("type", type)
-
-      const response = await fetch("/api/user/upload-image", {
-        method: "POST",
-        body: formDataObj,
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        // Update profile data with new image URL
-        setProfileData((prev: any) => ({
-          ...prev,
-          [type === "profile" ? "profileImage" : "backgroundImage"]: data.imageUrl,
-        }))
-
-        toast({
-          title: "Success",
-          description: data.message,
-        })
-      } else {
-        toast({
-          title: "Error",
-          description: data.error || "Failed to upload image",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      console.error("Upload error:", error)
-      toast({
-        title: "Error",
-        description: "Failed to upload image",
-        variant: "destructive",
-      })
-    } finally {
-      setUploading(null)
-    }
-  }
-
   const handleFileSelect = (type: "profile" | "background") => {
     const input = type === "profile" ? profileInputRef.current : backgroundInputRef.current
     input?.click()
-  }
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: "profile" | "background") => {
-    const file = e.target.files?.[0]
-    if (file) {
-      // Validate file type
-      const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"]
-      if (!validTypes.includes(file.type)) {
-        toast({
-          title: "Error",
-          description: "Invalid file type. Only images are allowed.",
-          variant: "destructive",
-        })
-        return
-      }
-
-      // Validate file size (max 5MB)
-      const maxSize = 5 * 1024 * 1024
-      if (file.size > maxSize) {
-        toast({
-          title: "Error",
-          description: "File too large. Maximum size is 5MB.",
-          variant: "destructive",
-        })
-        return
-      }
-
-      handleImageUpload(type, file)
-    }
-  }
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
   }
 
   // Dynamic statistics data

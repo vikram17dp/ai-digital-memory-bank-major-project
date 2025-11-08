@@ -53,7 +53,6 @@ interface AddMemoryFormProps {
   memories?: any[]
   insights?: any
   onSectionChange?: (section: string) => void
-  onMemorySaved?: () => void
 }
 
 const moodOptions = [
@@ -75,8 +74,7 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
   userData,
   memories,
   insights,
-  onSectionChange,
-  onMemorySaved
+  onSectionChange
 }) => {
   const [inputMode, setInputMode] = useState<'manual' | 'ai'>('manual')
   const [currentStep, setCurrentStep] = useState(1)
@@ -100,47 +98,74 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
   const [showAiResults, setShowAiResults] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [newTag, setNewTag] = useState('')
+  const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [savedMemories, setSavedMemories] = useState<any[]>([])
   const [isLoadingMemories, setIsLoadingMemories] = useState(false)
-  const [currentImageIndex, setCurrentImageIndex] = useState(0)
-  const [isAnalyzingAdditional, setIsAnalyzingAdditional] = useState(false)
-  const [touchStart, setTouchStart] = useState(0)
-  const [touchEnd, setTouchEnd] = useState(0)
+  const [memoriesPage, setMemoriesPage] = useState(1)
+  const memoriesPerPage = 8
 
   const totalSteps = 3
   const progress = (currentStep / totalSteps) * 100
 
-  // Fetch saved memories when component mounts - Show only 4 most recent
+  // Fetch saved memories when component mounts - Show user's memories with pagination
   useEffect(() => {
-    const fetchMemories = async () => {
-      setIsLoadingMemories(true)
-      try {
-        const response = await fetch('/api/memories/list?limit=4')
-        const data = await response.json()
-        if (data.success) {
-          setSavedMemories(data.memories)
-        }
-      } catch (error) {
-        console.error('Failed to fetch memories:', error)
-      } finally {
-        setIsLoadingMemories(false)
-      }
+    if (user?.id) {
+      fetchMemories()
     }
-    
-    fetchMemories()
-  }, [])
+  }, [user?.id, memoriesPage])
+
+  const fetchMemories = async () => {
+    setIsLoadingMemories(true)
+    try {
+      const response = await fetch(`/api/memories/list?limit=${memoriesPerPage}&offset=${(memoriesPage - 1) * memoriesPerPage}`, {
+        headers: {
+          'x-user-id': user?.id || '',
+        },
+      })
+      const data = await response.json()
+      if (data.success) {
+        setSavedMemories(data.memories)
+      }
+    } catch (error) {
+      console.error('Failed to fetch memories:', error)
+    } finally {
+      setIsLoadingMemories(false)
+    }
+  }
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
-  const handleImageUpload = async (files: FileList | File[], analyzeWithAI: boolean = false) => {
+  const handleImageUpload = async (files: FileList | File[]) => {
     const fileArray = Array.from(files)
+    const currentImageCount = formData.images.length
+    const MAX_IMAGES = 5
+    
+    // Check if adding these files would exceed the limit
+    if (currentImageCount >= MAX_IMAGES) {
+      toast.error('🖼️ Maximum images reached', {
+        description: `You can only upload up to ${MAX_IMAGES} images per memory`,
+        duration: 3000
+      })
+      return
+    }
+    
+    // Calculate how many more images can be added
+    const remainingSlots = MAX_IMAGES - currentImageCount
+    const filesToValidate = fileArray.slice(0, remainingSlots)
+    
+    if (fileArray.length > remainingSlots) {
+      toast.error(`🖼️ Too many images`, {
+        description: `You can only add ${remainingSlots} more image${remainingSlots === 1 ? '' : 's'} (max ${MAX_IMAGES} total)`,
+        duration: 3000
+      })
+    }
     
     // Validate files
-    const invalidFiles = fileArray.filter(file => !file.type.startsWith('image/'))
-    const oversizedFiles = fileArray.filter(file => file.size > 5 * 1024 * 1024)
-    const validFiles = fileArray.filter(file => 
+    const invalidFiles = filesToValidate.filter(file => !file.type.startsWith('image/'))
+    const oversizedFiles = filesToValidate.filter(file => file.size > 5 * 1024 * 1024)
+    const validFiles = filesToValidate.filter(file => 
       file.type.startsWith('image/') && file.size <= 5 * 1024 * 1024 // 5MB limit
     )
 
@@ -160,85 +185,31 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
     }
 
     if (validFiles.length > 0) {
-      // Check image limit (max 10 images)
-      const remainingSlots = 10 - formData.images.length
-      if (remainingSlots <= 0) {
-        toast.error('🚫 Maximum images reached', {
-          description: 'You can upload up to 10 images per memory',
-          duration: 2500
-        })
-        return
-      }
-      
-      const filesToProcess = validFiles.slice(0, remainingSlots)
-      if (validFiles.length > remainingSlots) {
-        toast.warning('⚠️ Some images skipped', {
-          description: `Only ${remainingSlots} image${remainingSlots > 1 ? 's' : ''} added (max 10 total)`,
-          duration: 2500
-        })
-      }
-      
-      // For AI mode in step 1, only allow one image
-      const finalFiles = (inputMode === 'ai' && currentStep === 1) ? [validFiles[0]] : filesToProcess
+      // In Step 3, always allow multiple images. In Step 1 AI mode, only one.
+      const isStep3 = currentStep === 3
+      const filesToProcess = (inputMode === 'ai' && !isStep3) ? [validFiles[0]] : validFiles
       
       setFormData(prev => ({ 
         ...prev, 
-        images: (inputMode === 'ai' && currentStep === 1) ? finalFiles : [...prev.images, ...finalFiles]
+        images: (inputMode === 'ai' && !isStep3) ? filesToProcess : [...prev.images, ...filesToProcess]
       }))
       
       // Create preview URLs
-      const newPreviewUrls = finalFiles.map(file => URL.createObjectURL(file))
-      setImagePreviewUrls(prev => (inputMode === 'ai' && currentStep === 1) ? newPreviewUrls : [...prev, ...newPreviewUrls])
+      const newPreviewUrls = filesToProcess.map(file => URL.createObjectURL(file))
+      setImagePreviewUrls(prev => (inputMode === 'ai' && !isStep3) ? newPreviewUrls : [...prev, ...newPreviewUrls])
+      
+      console.log('[Image Upload] Added images:', filesToProcess.length, 'Total now:', currentImageCount + filesToProcess.length)
       
       // Show upload success
       toast.success('📸 Image uploaded!', {
-        description: `${finalFiles.length} image${finalFiles.length > 1 ? 's' : ''} added successfully`,
+        description: `${filesToProcess.length} image${filesToProcess.length > 1 ? 's' : ''} added (${currentImageCount + filesToProcess.length}/${MAX_IMAGES})`,
         duration: 2000
       })
       
-      // If AI mode in step 1, automatically trigger AI analysis
-      if (inputMode === 'ai' && currentStep === 1) {
-        await handleAIAnalysis(finalFiles[0])
-      } else if (analyzeWithAI && finalFiles.length > 0) {
-        // In step 3, optionally analyze additional images
-        setIsAnalyzingAdditional(true)
-        for (const file of finalFiles) {
-          await handleAdditionalImageAnalysis(file)
-        }
-        setIsAnalyzingAdditional(false)
+      // If AI mode AND Step 1, automatically trigger AI analysis
+      if (inputMode === 'ai' && !isStep3) {
+        await handleAIAnalysis(filesToProcess[0])
       }
-    }
-  }
-  
-  const handleAdditionalImageAnalysis = async (imageFile: File) => {
-    try {
-      const formDataObj = new FormData()
-      formDataObj.append('image', imageFile)
-      
-      const response = await fetch('/api/memory/extract', {
-        method: 'POST',
-        body: formDataObj
-      })
-      
-      const result = await response.json()
-      
-      if (result.success && result.data) {
-        // Merge new tags with existing ones (avoid duplicates)
-        const newTags = result.data.tags.filter((tag: string) => !formData.tags.includes(tag))
-        if (newTags.length > 0) {
-          setFormData(prev => ({
-            ...prev,
-            tags: [...prev.tags, ...newTags]
-          }))
-          
-          toast.success('✨ Additional details extracted!', {
-            description: `Added ${newTags.length} new tag${newTags.length > 1 ? 's' : ''} from image`,
-            duration: 2000
-          })
-        }
-      }
-    } catch (error) {
-      console.error('Additional image analysis failed:', error)
     }
   }
   
@@ -371,6 +342,14 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
       URL.revokeObjectURL(prev[index]) // Clean up memory
       return prev.filter((_, i) => i !== index)
     })
+    // Reset to first image if current index is out of bounds
+    setCurrentImageIndex(prevIndex => {
+      if (prevIndex >= imagePreviewUrls.length - 1) {
+        return Math.max(0, imagePreviewUrls.length - 2)
+      }
+      return prevIndex
+    })
+    toast.success('🗑️ Image removed', { duration: 2000 })
   }
 
   const addTag = (tag: string) => {
@@ -411,37 +390,6 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
       handleImageUpload(e.dataTransfer.files)
     }
   }
-  
-  // Touch handlers for swipe gestures
-  const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchStart(e.targetTouches[0].clientX)
-  }
-  
-  const handleTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX)
-  }
-  
-  const handleTouchEnd = () => {
-    if (!touchStart || !touchEnd) return
-    
-    const distance = touchStart - touchEnd
-    const isLeftSwipe = distance > 50
-    const isRightSwipe = distance < -50
-    
-    if (isLeftSwipe && imagePreviewUrls.length > 1) {
-      // Swipe left - next image
-      setCurrentImageIndex((prev) => (prev === imagePreviewUrls.length - 1 ? 0 : prev + 1))
-    }
-    
-    if (isRightSwipe && imagePreviewUrls.length > 1) {
-      // Swipe right - previous image
-      setCurrentImageIndex((prev) => (prev === 0 ? imagePreviewUrls.length - 1 : prev - 1))
-    }
-    
-    // Reset
-    setTouchStart(0)
-    setTouchEnd(0)
-  }
 
   const handleSubmit = async () => {
     setIsSubmitting(true)
@@ -471,7 +419,10 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
       // Determine processing mode based on form data
       let mode = inputMode // Use the current input mode
       
+      console.log('[Add Memory] Submitting memory for user:', user?.id)
+      
       submitFormData.append('mode', mode)
+      submitFormData.append('userId', user?.id || '')
       submitFormData.append('title', formData.title)
       submitFormData.append('content', formData.content)
       submitFormData.append('mood', formData.mood)
@@ -483,7 +434,9 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
       submitFormData.append('isFavorite', formData.isFavorite.toString())
       
       // Add images
+      console.log(`[Add Memory] Submitting ${formData.images.length} images to API`)
       formData.images.forEach((image, index) => {
+        console.log(`[Add Memory] Adding image_${index}: ${image.name} (${image.size} bytes)`)
         submitFormData.append(`image_${index}`, image)
       })
       
@@ -502,8 +455,8 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
       
       toast.success('🎉 Memory saved successfully!', {
         id: 'save-memory',
-        description: 'Redirecting to memories page...',
-        duration: 2000
+        description: 'Redirecting to your memories...',
+        duration: 1500
       })
       
       // Reset form for next memory
@@ -526,12 +479,7 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
       setShowAiResults(false)
       setInputMode('manual')
       
-      // Call the callback to refresh memories if provided
-      if (onMemorySaved) {
-        onMemorySaved()
-      }
-      
-      // Redirect to memories page after a short delay
+      // Auto-redirect to memories page after 500ms
       setTimeout(() => {
         if (onSectionChange) {
           onSectionChange('memories')
@@ -585,31 +533,33 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
       case 1:
         return (
           <div className="space-y-6">
-            {/* Mode Toggle */}
-            <div className="flex justify-center mb-8">
-              <div className="bg-white/80 dark:bg-gray-800/80 p-1 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
+            {/* Mode Toggle - Responsive */}
+            <div className="flex justify-center mb-6 sm:mb-8 px-4 sm:px-0">
+              <div className="bg-white/80 dark:bg-gray-800/80 p-1 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm w-full sm:w-auto max-w-sm">
                 <div className="flex">
                   <button
                     onClick={() => setInputMode('manual')}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                    className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 ${
                       inputMode === 'manual' 
                         ? 'bg-blue-500 text-white shadow-md' 
                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
                     }`}
                   >
-                    <Edit3 className="h-4 w-4" />
-                    Manual Entry
+                    <Edit3 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    <span className="hidden xs:inline">Manual Entry</span>
+                    <span className="xs:hidden">Manual</span>
                   </button>
                   <button
                     onClick={() => setInputMode('ai')}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                    className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 ${
                       inputMode === 'ai' 
                         ? 'bg-purple-500 text-white shadow-md' 
                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
                     }`}
                   >
-                    <Wand2 className="h-4 w-4" />
-                    AI Upload
+                    <Wand2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    <span className="hidden xs:inline">AI Upload</span>
+                    <span className="xs:hidden">AI</span>
                   </button>
                 </div>
               </div>
@@ -617,14 +567,14 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
             
             {inputMode === 'manual' ? (
               <>
-                <div className="text-center mb-8">
-                  <div className="w-20 h-20 mx-auto mb-4 rounded-3xl bg-gradient-to-br from-blue-500 via-purple-500 to-cyan-500 flex items-center justify-center shadow-lg">
-                    <FileText className="h-10 w-10 text-white" />
+                <div className="text-center mb-6 sm:mb-8 px-4 sm:px-0">
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-3 sm:mb-4 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-blue-500 via-purple-500 to-cyan-500 flex items-center justify-center shadow-lg">
+                    <FileText className="h-8 w-8 sm:h-10 sm:w-10 text-white" />
                   </div>
-                  <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-600 bg-clip-text text-transparent mb-2">
+                  <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-600 bg-clip-text text-transparent mb-2">
                     Tell Your Story
                   </h2>
-                  <p className="text-gray-600 dark:text-gray-300">What happened? Share the details of this memory</p>
+                  <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 px-4">What happened? Share the details of this memory</p>
                 </div>
 
             <div className="space-y-6">
@@ -705,14 +655,14 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
               </>
             ) : (
               <>
-                <div className="text-center mb-8">
-                  <div className="w-20 h-20 mx-auto mb-4 rounded-3xl bg-gradient-to-br from-purple-500 via-pink-500 to-indigo-500 flex items-center justify-center shadow-lg">
-                    <Wand2 className="h-10 w-10 text-white" />
+                <div className="text-center mb-6 sm:mb-8 px-4 sm:px-0">
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-3 sm:mb-4 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-purple-500 via-pink-500 to-indigo-500 flex items-center justify-center shadow-lg">
+                    <Wand2 className="h-8 w-8 sm:h-10 sm:w-10 text-white" />
                   </div>
-                  <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-600 via-pink-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+                  <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-purple-600 via-pink-600 to-indigo-600 bg-clip-text text-transparent mb-2">
                     AI-Powered Memory Details
                   </h2>
-                  <p className="text-gray-600 dark:text-gray-300">Upload a photo and let AI extract the memory details</p>
+                  <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 px-4">Upload a photo and let AI extract the memory details</p>
                 </div>
 
                 {/* AI Upload Area */}
@@ -1185,61 +1135,24 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
 
       case 3:
         return (
-          <div className="space-y-6">
-            <div className="text-center mb-8">
-              <div className="w-20 h-20 mx-auto mb-4 rounded-3xl bg-gradient-to-br from-green-500 via-teal-500 to-cyan-500 flex items-center justify-center shadow-lg">
-                <Camera className="h-10 w-10 text-white" />
+          <div className="space-y-4 sm:space-y-6">
+            <div className="text-center mb-6 sm:mb-8 px-4 sm:px-0">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-3 sm:mb-4 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-green-500 via-teal-500 to-cyan-500 flex items-center justify-center shadow-lg">
+                <Camera className="h-8 w-8 sm:h-10 sm:w-10 text-white" />
               </div>
-              <h2 className="text-2xl font-bold bg-gradient-to-r from-green-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent mb-2">
+              <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-green-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent mb-2">
                 Preview & Share
               </h2>
-              <p className="text-gray-600 dark:text-gray-300">Review your memory and see your collection</p>
+              <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 px-4">Review your memory and see your collection</p>
             </div>
 
             <div className="space-y-6">
               {/* Image Upload Area */}
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                    <Image className="inline h-4 w-4 mr-2" />
-                    Photos ({formData.images.length}/10) - Optional
-                  </Label>
-                  {formData.images.length > 0 && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={async () => {
-                        setIsAnalyzingAdditional(true)
-                        toast.loading('🧠 Analyzing images with AI...', {
-                          id: 'analyze-additional'
-                        })
-                        for (const file of formData.images) {
-                          await handleAdditionalImageAnalysis(file)
-                        }
-                        setIsAnalyzingAdditional(false)
-                        toast.success('✨ Analysis complete!', {
-                          id: 'analyze-additional',
-                          description: 'Tags and details updated'
-                        })
-                      }}
-                      disabled={isAnalyzingAdditional}
-                      className="bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/30 border-purple-200 dark:border-purple-700 text-purple-700 dark:text-purple-300"
-                    >
-                      {isAnalyzingAdditional ? (
-                        <>
-                          <div className="w-3 h-3 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mr-2" />
-                          Analyzing...
-                        </>
-                      ) : (
-                        <>
-                          <Wand2 className="h-3 w-3 mr-2" />
-                          Analyze with AI
-                        </>
-                      )}
-                    </Button>
-                  )}
-                </div>
+                <Label className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  <Image className="inline h-4 w-4 mr-2" />
+                  Photos ({formData.images.length}/5) - Optional
+                </Label>
                 
                 <div 
                   className={`relative border-2 border-dashed rounded-2xl p-6 transition-all duration-300 hover:border-blue-400 dark:hover:border-blue-500 ${
@@ -1271,7 +1184,7 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                         Add photos to your memory
                       </h3>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        JPG, PNG, GIF up to 5MB each (max 10 images)
+                        JPG, PNG, GIF up to 5MB each
                       </p>
                     </div>
                     
@@ -1281,100 +1194,36 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                       size="sm"
                       onClick={() => fileInputRef.current?.click()}
                       className="bg-white/80 dark:bg-gray-800/80 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-200"
-                      disabled={formData.images.length >= 10}
                     >
                       <Upload className="h-3 w-3 mr-2" />
-                      {formData.images.length >= 10 ? 'Max Images Reached' : 'Choose Files'}
+                      Choose Files
                     </Button>
                   </div>
                 </div>
                 
-                {/* Image Previews with Slider */}
+                {/* Image Previews - Responsive Grid */}
                 {imagePreviewUrls.length > 0 && (
-                  <div className="space-y-3">
-                    {/* Main Image Slider */}
-                    <div 
-                      className="relative aspect-video rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-900 shadow-lg touch-pan-y"
-                      onTouchStart={handleTouchStart}
-                      onTouchMove={handleTouchMove}
-                      onTouchEnd={handleTouchEnd}
-                    >
-                      <img
-                        src={imagePreviewUrls[currentImageIndex]}
-                        alt={`Preview ${currentImageIndex + 1}`}
-                        className="w-full h-full object-cover select-none"
-                        draggable={false}
-                      />
-                      
-                      {/* Navigation Arrows */}
-                      {imagePreviewUrls.length > 1 && (
-                        <>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setCurrentImageIndex((prev) => (prev === 0 ? imagePreviewUrls.length - 1 : prev - 1))}
-                            className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 text-white p-0 backdrop-blur-sm"
-                          >
-                            <ChevronLeft className="h-5 w-5" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setCurrentImageIndex((prev) => (prev === imagePreviewUrls.length - 1 ? 0 : prev + 1))}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 text-white p-0 backdrop-blur-sm"
-                          >
-                            <ChevronRight className="h-5 w-5" />
-                          </Button>
-                        </>
-                      )}
-                      
-                      {/* Image Counter */}
-                      <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2.5 py-1 rounded-full font-medium backdrop-blur-sm">
-                        {currentImageIndex + 1} / {imagePreviewUrls.length}
+                  <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+                    {imagePreviewUrls.map((url, index) => (
+                      <div key={index} className="relative group">
+                        <div className="aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 shadow-sm">
+                          <img 
+                            src={url} 
+                            alt={`Preview ${index + 1}`} 
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => removeImage(index)}
+                          className="absolute -top-1 -right-1 w-6 h-6 rounded-full p-0 shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
                       </div>
-                      
-                      {/* Delete Current Image */}
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => {
-                          removeImage(currentImageIndex)
-                          if (currentImageIndex >= imagePreviewUrls.length - 1) {
-                            setCurrentImageIndex(Math.max(0, imagePreviewUrls.length - 2))
-                          }
-                        }}
-                        className="absolute top-2 left-2 w-8 h-8 rounded-full p-0 shadow-md backdrop-blur-sm"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    
-                    {/* Thumbnail Navigation */}
-                    {imagePreviewUrls.length > 1 && (
-                      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200 dark:scrollbar-thumb-gray-600 dark:scrollbar-track-gray-800">
-                        {imagePreviewUrls.map((url, index) => (
-                          <button
-                            key={index}
-                            type="button"
-                            onClick={() => setCurrentImageIndex(index)}
-                            className={`relative flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden transition-all duration-200 ${
-                              currentImageIndex === index
-                                ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-900 scale-105'
-                                : 'opacity-60 hover:opacity-100'
-                            }`}
-                          >
-                            <img
-                              src={url}
-                              alt={`Thumbnail ${index + 1}`}
-                              className="w-full h-full object-cover"
-                            />
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                    ))}
                   </div>
                 )}
               </div>
@@ -1386,8 +1235,8 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                   Your Memory
                 </Label>
                 
-                {/* Desktop: Smaller card, Mobile: Full width */}
-                <div className="max-w-lg mx-auto lg:max-w-md">
+                {/* Responsive Preview Card */}
+                <div className="max-w-full sm:max-w-lg mx-auto lg:max-w-md px-2 sm:px-0">
                   <Card className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden shadow-lg">
                     {/* Header with user info */}
                     <div className="p-3 sm:p-4 flex items-center gap-3 border-b border-gray-200 dark:border-gray-700">
@@ -1411,58 +1260,69 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                       )}
                     </div>
 
-                    {/* Image Gallery with Slider - Smaller on desktop */}
+                    {/* Image Gallery with Swipe/Navigation */}
                     {imagePreviewUrls.length > 0 && (
-                      <div 
-                        className="relative aspect-square sm:aspect-[4/3] lg:aspect-video bg-gray-100 dark:bg-gray-900 touch-pan-y"
-                        onTouchStart={handleTouchStart}
-                        onTouchMove={handleTouchMove}
-                        onTouchEnd={handleTouchEnd}
-                      >
+                      <div className="relative aspect-square sm:aspect-[4/3] lg:aspect-video bg-gray-100 dark:bg-gray-900 group">
                         <img 
                           src={imagePreviewUrls[currentImageIndex]} 
-                          alt="Memory" 
-                          className="w-full h-full object-cover select-none"
-                          draggable={false}
+                          alt={`Memory ${currentImageIndex + 1}`}
+                          className="w-full h-full object-cover"
                         />
                         
-                        {/* Navigation Arrows for Preview */}
+                        {/* Image Counter */}
+                        <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded-full font-medium">
+                          {currentImageIndex + 1}/{imagePreviewUrls.length}
+                        </div>
+                        
+                        {/* Navigation Arrows - Show if more than 1 image */}
                         {imagePreviewUrls.length > 1 && (
                           <>
-                            <button
+                            <Button
                               type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setCurrentImageIndex((prev) => (prev === 0 ? imagePreviewUrls.length - 1 : prev - 1))
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                console.log('[Carousel] Previous clicked, current:', currentImageIndex)
+                                setCurrentImageIndex((prev) => {
+                                  const newIndex = prev === 0 ? imagePreviewUrls.length - 1 : prev - 1
+                                  console.log('[Carousel] New index:', newIndex)
+                                  return newIndex
+                                })
                               }}
-                              className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-sm transition-all"
+                              className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full w-8 h-8 opacity-100 transition-opacity z-10"
                             >
-                              <ChevronLeft className="h-4 w-4" />
-                            </button>
-                            <button
+                              <ChevronLeft className="h-5 w-5" />
+                            </Button>
+                            <Button
                               type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setCurrentImageIndex((prev) => (prev === imagePreviewUrls.length - 1 ? 0 : prev + 1))
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                console.log('[Carousel] Next clicked, current:', currentImageIndex)
+                                setCurrentImageIndex((prev) => {
+                                  const newIndex = prev === imagePreviewUrls.length - 1 ? 0 : prev + 1
+                                  console.log('[Carousel] New index:', newIndex)
+                                  return newIndex
+                                })
                               }}
-                              className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-sm transition-all"
+                              className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full w-8 h-8 opacity-100 transition-opacity z-10"
                             >
-                              <ChevronRight className="h-4 w-4" />
-                            </button>
+                              <ChevronRight className="h-5 w-5" />
+                            </Button>
                             
                             {/* Dot Indicators */}
                             <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
-                              {imagePreviewUrls.map((_, index) => (
+                              {imagePreviewUrls.map((_, idx) => (
                                 <button
-                                  key={index}
+                                  key={idx}
                                   type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setCurrentImageIndex(index)
+                                  onClick={() => {
+                                    console.log('[Carousel] Dot clicked, index:', idx)
+                                    setCurrentImageIndex(idx)
                                   }}
-                                  className={`w-1.5 h-1.5 rounded-full transition-all ${
-                                    currentImageIndex === index
-                                      ? 'bg-white w-4'
+                                  className={`w-1.5 h-1.5 rounded-full transition-all z-10 ${
+                                    idx === currentImageIndex 
+                                      ? 'bg-white w-4' 
                                       : 'bg-white/50 hover:bg-white/75'
                                   }`}
                                 />
@@ -1470,11 +1330,6 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                             </div>
                           </>
                         )}
-                        
-                        {/* Image Counter */}
-                        <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded-full font-medium backdrop-blur-sm">
-                          {currentImageIndex + 1}/{imagePreviewUrls.length}
-                        </div>
                       </div>
                     )}
 
@@ -1539,7 +1394,8 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                     ))}
                   </div>
                 ) : savedMemories.length > 0 ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+                  <>
+                  <div className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-3">
                     {savedMemories.map((memory) => (
                       <div 
                         key={memory.id} 
@@ -1585,6 +1441,33 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                       </div>
                     ))}
                   </div>
+                  {/* Pagination - Responsive */}
+                  <div className="flex flex-wrap justify-center items-center gap-2 mt-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setMemoriesPage(p => Math.max(1, p - 1))}
+                      disabled={memoriesPage === 1 || isLoadingMemories}
+                      className="text-xs sm:text-sm"
+                    >
+                      <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
+                      <span className="hidden xs:inline">Previous</span>
+                    </Button>
+                    <span className="flex items-center px-2 sm:px-3 text-xs sm:text-sm text-muted-foreground">
+                      Page {memoriesPage}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setMemoriesPage(p => p + 1)}
+                      disabled={savedMemories.length < memoriesPerPage || isLoadingMemories}
+                      className="text-xs sm:text-sm"
+                    >
+                      <span className="hidden xs:inline">Next</span>
+                      <ChevronRight className="h-3 w-3 sm:h-4 sm:w-4 sm:ml-1" />
+                    </Button>
+                  </div>
+                  </>
                 ) : (
                   <div className="text-center py-6 sm:py-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/30 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-700">
                     <BookOpen className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-2 sm:mb-3 opacity-30" />
@@ -1689,58 +1572,62 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                 {renderStepContent()}
               </div>
               
-              {/* Navigation Buttons */}
-              <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-200/50 dark:border-gray-700/50">
+              {/* Navigation Buttons - Responsive */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-gray-200/50 dark:border-gray-700/50">
+                {/* Previous Button */}
                 <Button 
                   variant="outline"
                   onClick={() => handleStepChange(Math.max(1, currentStep - 1))}
                   disabled={currentStep === 1}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-white/80 dark:bg-gray-800/80 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl transition-all duration-200 disabled:opacity-50"
+                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 bg-white/80 dark:bg-gray-800/80 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg sm:rounded-xl transition-all duration-200 disabled:opacity-50 text-sm sm:text-base"
                 >
                   <ChevronLeft className="h-4 w-4" />
-                  Previous
+                  <span>Previous</span>
                 </Button>
                 
-                <div className="flex items-center gap-3">
+                {/* Step Indicators */}
+                <div className="flex items-center gap-2 sm:gap-3 order-first sm:order-none">
                   {Array.from({ length: totalSteps }, (_, i) => (
                     <button
                       key={i}
                       onClick={() => handleStepChange(i + 1)}
                       disabled={i + 1 > currentStep && !canProceedToNext()}
-                      className={`w-3 h-3 rounded-full transition-all duration-300 hover:scale-125 focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:cursor-not-allowed ${
+                      className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full transition-all duration-300 hover:scale-125 focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:cursor-not-allowed ${
                         i + 1 <= currentStep 
                           ? 'bg-gradient-to-r from-blue-500 to-purple-500 shadow-md cursor-pointer' 
                           : 'bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 cursor-pointer'
                       }`}
                       title={`Go to step ${i + 1}`}
+                      aria-label={`Step ${i + 1}`}
                     />
                   ))}
                 </div>
                 
+                {/* Next / Save Button */}
                 {currentStep < totalSteps ? (
                   <Button 
                     onClick={() => handleStepChange(Math.min(totalSteps, currentStep + 1))}
                     disabled={!canProceedToNext()}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-blue-500 via-purple-500 to-cyan-500 hover:from-blue-600 hover:via-purple-600 hover:to-cyan-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed group"
+                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-blue-500 via-purple-500 to-cyan-500 hover:from-blue-600 hover:via-purple-600 hover:to-cyan-600 text-white rounded-lg sm:rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed group text-sm sm:text-base font-medium"
                   >
-                    Next
+                    <span>Next</span>
                     <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform duration-200" />
                   </Button>
                 ) : (
                   <Button 
                     onClick={handleSubmit}
                     disabled={!canProceedToNext() || isSubmitting}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 hover:from-green-600 hover:via-emerald-600 hover:to-teal-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed group min-w-[120px]"
+                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 hover:from-green-600 hover:via-emerald-600 hover:to-teal-600 text-white rounded-lg sm:rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed group min-w-[120px] text-sm sm:text-base font-medium"
                   >
                     {isSubmitting ? (
                       <>
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        Saving...
+                        <span>Saving...</span>
                       </>
                     ) : (
                       <>
                         <Save className="h-4 w-4 group-hover:scale-110 transition-transform duration-200" />
-                        Save Memory
+                        <span>Save Memory</span>
                       </>
                     )}
                   </Button>

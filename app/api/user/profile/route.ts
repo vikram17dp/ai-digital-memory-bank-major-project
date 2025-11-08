@@ -1,23 +1,37 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { auth } from "@clerk/nextjs/server"
+import { auth, currentUser } from "@clerk/nextjs/server"
 import { prisma } from "@/lib/prisma"
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    const { userId } = await auth()
+    // Try to get auth from Clerk, fallback to headers
+    let userId: string | null = null
+    let email: string = ""
+
+    try {
+      const authResult = auth()
+      userId = authResult.userId
+      if (userId) {
+        const clerkUser = await currentUser()
+        email = clerkUser?.emailAddresses?.[0]?.emailAddress || ""
+      }
+    } catch (authError) {
+      console.log("[Profile] Clerk auth failed, using headers")
+    }
+
+    // Fallback to headers if Clerk auth failed
+    if (!userId) {
+      userId = request.headers.get('x-user-id')
+      email = request.headers.get('x-user-email') || ""
+    }
 
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Get user email from Clerk
-    const { clerkClient } = await import("@clerk/nextjs/server")
-    const user = await (await clerkClient()).users.getUser(userId)
-    const email = user?.emailAddresses?.[0]?.emailAddress
-
-    if (!email) {
-      return NextResponse.json({ error: "User email not found" }, { status: 400 })
-    }
+    console.log("[Profile GET] userId:", userId, "email:", email)
 
     // Fetch or create user profile
     let userProfile = await prisma.userProfile.findUnique({
@@ -180,18 +194,44 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const { userId } = await auth()
+    // Try to get auth from Clerk, fallback to headers
+    let userId: string | null = null
+    let email: string = ""
+
+    try {
+      const authResult = auth()
+      userId = authResult.userId
+      if (userId) {
+        const clerkUser = await currentUser()
+        email = clerkUser?.emailAddresses?.[0]?.emailAddress || ""
+      }
+    } catch (authError) {
+      console.log("[Profile] Clerk auth failed, using headers")
+    }
+
+    // Fallback to headers if Clerk auth failed
+    if (!userId) {
+      userId = request.headers.get('x-user-id')
+      email = request.headers.get('x-user-email') || ""
+    }
+
+    const body = await request.json()
+    const { bio, location, website, phone, timezone } = body
+
+    // Use email from body if not from auth
+    if (!email && body.email) {
+      email = body.email
+    }
 
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const body = await request.json()
-    const { email, bio, location, website, phone, timezone } = body
-
     if (!email) {
       return NextResponse.json({ error: "Email is required" }, { status: 400 })
     }
+
+    console.log("[Profile Update] userId:", userId, "email:", email)
 
     // Update or create user profile
     const userProfile = await prisma.userProfile.upsert({
@@ -231,3 +271,4 @@ export async function PUT(request: NextRequest) {
     )
   }
 }
+

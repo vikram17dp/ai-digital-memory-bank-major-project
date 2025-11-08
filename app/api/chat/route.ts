@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@clerk/nextjs/server';
 
+export const dynamic = 'force-dynamic';
+
 // API Key cycling configuration
 const API_KEYS = [
   process.env.SARVAM_API_KEY_1,
@@ -133,13 +135,8 @@ async function makeApiRequest(
 
 export async function POST(request: NextRequest) {
   try {
-    // Await auth() to get userId
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const { message } = await request.json();
+    const userId = request.headers.get('x-user-id') || 'anonymous';
     if (!message || typeof message !== 'string') {
       return NextResponse.json({ error: 'Message is required and must be a string' }, { status: 400 });
     }

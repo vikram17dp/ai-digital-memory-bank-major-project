@@ -32,6 +32,7 @@ import {
 } from 'lucide-react'
 import AnalyticsPage from './analytics-page'
 import SettingsPage from './settings-client'
+import { MemoriesPage } from './memories-page'
 
 interface User {
   id: string
@@ -172,38 +173,9 @@ const StatsCard: React.FC<{
   )
 }
 
-export function DashboardContent({ activeSection = 'dashboard', onSectionChange = () => {}, user, memories: initialMemories = sampleMemories, insights: initialInsights = sampleInsights }: DashboardContentProps) {
+export function DashboardContent({ activeSection = 'dashboard', onSectionChange = () => {}, user, memories = sampleMemories, insights = sampleInsights }: DashboardContentProps) {
   const [currentPage, setCurrentPage] = React.useState(1)
-  const [memories, setMemories] = React.useState<Memory[]>(initialMemories)
-  const [insights, setInsights] = React.useState<Insights>(initialInsights)
-  const [isRefreshing, setIsRefreshing] = React.useState(false)
   const memoriesPerPage = 9
-  
-  // Function to refresh memories from API
-  const refreshMemories = React.useCallback(async () => {
-    if (!user?.id) return
-    
-    setIsRefreshing(true)
-    try {
-      const response = await fetch('/api/memories/list')
-      const data = await response.json()
-      
-      if (data.success) {
-        setMemories(data.memories)
-      }
-    } catch (error) {
-      console.error('Failed to refresh memories:', error)
-    } finally {
-      setIsRefreshing(false)
-    }
-  }, [user?.id])
-  
-  // Refresh memories when switching to memories section
-  React.useEffect(() => {
-    if (activeSection === 'memories' || activeSection === 'dashboard') {
-      refreshMemories()
-    }
-  }, [activeSection, refreshMemories])
   
   const getUserInitials = () => {
     if (user?.firstName && user?.lastName) {
@@ -459,73 +431,8 @@ export function DashboardContent({ activeSection = 'dashboard', onSectionChange 
       
       case 'memories':
         return (
-          <div className="p-6 space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold">All Memories</h1>
-                <p className="text-muted-foreground">
-                  Browse and manage your memory collection ({memories.length} total)
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm">
-                  <Filter className="mr-2 h-4 w-4" />
-                  Filter
-                </Button>
-                <Button size="sm" onClick={() => onSectionChange('add')}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Memory
-                </Button>
-              </div>
-            </div>
-            
-            {/* Memory Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-fr">
-              {currentMemories.map((memory) => (
-                <MemoryCard key={memory.id} memory={memory} onUpdate={refreshMemories} />
-              ))}
-            </div>
-            
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-8">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                  className="gap-1"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  Previous
-                </Button>
-                
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                    <Button
-                      key={page}
-                      variant={currentPage === page ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setCurrentPage(page)}
-                      className="w-10"
-                    >
-                      {page}
-                    </Button>
-                  ))}
-                </div>
-                
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages}
-                  className="gap-1"
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
+          <div className="h-full overflow-y-auto">
+            <MemoriesPage onSectionChange={onSectionChange} />
           </div>
         )
       
@@ -551,11 +458,7 @@ export function DashboardContent({ activeSection = 'dashboard', onSectionChange 
               <h1 className="text-3xl font-bold mb-2">Add New Memory</h1>
               <p className="text-muted-foreground">Capture and preserve your precious moments</p>
             </div>
-            <AddMemoryForm 
-              user={user} 
-              onSectionChange={onSectionChange} 
-              onMemorySaved={refreshMemories}
-            />
+            <AddMemoryForm user={user} onSectionChange={onSectionChange} />
           </div>
         )
       
@@ -566,7 +469,7 @@ export function DashboardContent({ activeSection = 'dashboard', onSectionChange 
               <h1 className="text-3xl font-bold mb-2">Search Memories</h1>
               <p className="text-muted-foreground">Find and explore your memories with advanced filtering</p>
             </div>
-            <SearchInterface user={user} memories={memories} onSectionChange={onSectionChange} />
+            <SearchInterface user={user} onSectionChange={onSectionChange} />
           </div>
         )
       
