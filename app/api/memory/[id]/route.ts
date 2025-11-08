@@ -13,10 +13,10 @@ export async function GET(
     const { id } = await params;
     const userId = request.headers.get('x-user-id');
 
-    const memory = await prisma.memory.findUnique({
+const memory = await prisma.memory.findFirst({
       where: {
         id: id,
-        ...(userId && { userId }), // Filter by userId if provided
+        ...(userId ? { userId } : {}),
       },
     });
 
@@ -43,10 +43,10 @@ export async function PUT(
     const userId = request.headers.get('x-user-id');
 
     // Verify the memory exists
-    const existingMemory = await prisma.memory.findUnique({
+const existingMemory = await prisma.memory.findFirst({
       where: {
         id: id,
-        ...(userId && { userId }),
+        ...(userId ? { userId } : {}),
       },
     });
 
@@ -54,24 +54,34 @@ export async function PUT(
       return NextResponse.json({ error: 'Memory not found' }, { status: 404 });
     }
 
+    // Build update data object - only include fields that are explicitly provided
+    const updateData: any = {}
+    
+    if (title !== undefined) updateData.title = title
+    if (content !== undefined) updateData.content = content
+    if (tags !== undefined) updateData.tags = tags
+    if (mood !== undefined) updateData.mood = mood
+    if (location !== undefined) updateData.location = location
+    if (people !== undefined) updateData.people = people
+    if (sentiment !== undefined) updateData.sentiment = sentiment
+    if (isFavorite !== undefined) updateData.isFavorite = isFavorite
+    if (isPrivate !== undefined) updateData.isPrivate = isPrivate
+    
+    // Only update images if explicitly provided (not undefined)
+    if (images !== undefined) updateData.images = images
+    if (imageUrl !== undefined) updateData.imageUrl = imageUrl
+    
+    console.log(`[Memory Update] Updating memory ${id} with:`, Object.keys(updateData))
+    if (images !== undefined) {
+      console.log(`[Memory Update] Images array length: ${images.length}`, images)
+    }
+
     // Update the memory
     const updatedMemory = await prisma.memory.update({
       where: {
         id: id,
       },
-      data: {
-        title,
-        content,
-        tags: tags || [],
-        mood,
-        location,
-        people,
-        images: images || [],
-        imageUrl,
-        sentiment,
-        isFavorite,
-        isPrivate,
-      },
+      data: updateData,
     });
 
     return NextResponse.json({ 
@@ -96,10 +106,10 @@ export async function DELETE(
     const userId = request.headers.get('x-user-id');
 
     // Verify the memory exists and get image URLs
-    const existingMemory = await prisma.memory.findUnique({
+const existingMemory = await prisma.memory.findFirst({
       where: {
         id: id,
-        ...(userId && { userId }),
+        ...(userId ? { userId } : {}),
       },
     });
 

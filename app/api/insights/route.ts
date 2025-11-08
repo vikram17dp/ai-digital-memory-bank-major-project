@@ -12,18 +12,9 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Get user from database
-    const user = await prisma.user.findUnique({
-      where: { clerkId: userId },
-    })
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
-    }
-
-    // Get all memories for analysis
+// Get all memories for analysis (use Clerk userId directly)
     const memories = await prisma.memory.findMany({
-      where: { userId: user.id },
+      where: { userId: userId },
       select: {
         sentiment: true,
         tags: true,

@@ -533,31 +533,33 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
       case 1:
         return (
           <div className="space-y-6">
-            {/* Mode Toggle */}
-            <div className="flex justify-center mb-8">
-              <div className="bg-white/80 dark:bg-gray-800/80 p-1 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
+            {/* Mode Toggle - Responsive */}
+            <div className="flex justify-center mb-6 sm:mb-8 px-4 sm:px-0">
+              <div className="bg-white/80 dark:bg-gray-800/80 p-1 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm w-full sm:w-auto max-w-sm">
                 <div className="flex">
                   <button
                     onClick={() => setInputMode('manual')}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                    className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 ${
                       inputMode === 'manual' 
                         ? 'bg-blue-500 text-white shadow-md' 
                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
                     }`}
                   >
-                    <Edit3 className="h-4 w-4" />
-                    Manual Entry
+                    <Edit3 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    <span className="hidden xs:inline">Manual Entry</span>
+                    <span className="xs:hidden">Manual</span>
                   </button>
                   <button
                     onClick={() => setInputMode('ai')}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                    className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 ${
                       inputMode === 'ai' 
                         ? 'bg-purple-500 text-white shadow-md' 
                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
                     }`}
                   >
-                    <Wand2 className="h-4 w-4" />
-                    AI Upload
+                    <Wand2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    <span className="hidden xs:inline">AI Upload</span>
+                    <span className="xs:hidden">AI</span>
                   </button>
                 </div>
               </div>
@@ -565,14 +567,14 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
             
             {inputMode === 'manual' ? (
               <>
-                <div className="text-center mb-8">
-                  <div className="w-20 h-20 mx-auto mb-4 rounded-3xl bg-gradient-to-br from-blue-500 via-purple-500 to-cyan-500 flex items-center justify-center shadow-lg">
-                    <FileText className="h-10 w-10 text-white" />
+                <div className="text-center mb-6 sm:mb-8 px-4 sm:px-0">
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-3 sm:mb-4 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-blue-500 via-purple-500 to-cyan-500 flex items-center justify-center shadow-lg">
+                    <FileText className="h-8 w-8 sm:h-10 sm:w-10 text-white" />
                   </div>
-                  <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-600 bg-clip-text text-transparent mb-2">
+                  <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-600 bg-clip-text text-transparent mb-2">
                     Tell Your Story
                   </h2>
-                  <p className="text-gray-600 dark:text-gray-300">What happened? Share the details of this memory</p>
+                  <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 px-4">What happened? Share the details of this memory</p>
                 </div>
 
             <div className="space-y-6">
@@ -653,14 +655,14 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
               </>
             ) : (
               <>
-                <div className="text-center mb-8">
-                  <div className="w-20 h-20 mx-auto mb-4 rounded-3xl bg-gradient-to-br from-purple-500 via-pink-500 to-indigo-500 flex items-center justify-center shadow-lg">
-                    <Wand2 className="h-10 w-10 text-white" />
+                <div className="text-center mb-6 sm:mb-8 px-4 sm:px-0">
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-3 sm:mb-4 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-purple-500 via-pink-500 to-indigo-500 flex items-center justify-center shadow-lg">
+                    <Wand2 className="h-8 w-8 sm:h-10 sm:w-10 text-white" />
                   </div>
-                  <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-600 via-pink-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+                  <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-purple-600 via-pink-600 to-indigo-600 bg-clip-text text-transparent mb-2">
                     AI-Powered Memory Details
                   </h2>
-                  <p className="text-gray-600 dark:text-gray-300">Upload a photo and let AI extract the memory details</p>
+                  <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 px-4">Upload a photo and let AI extract the memory details</p>
                 </div>
 
                 {/* AI Upload Area */}
@@ -1133,15 +1135,15 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
 
       case 3:
         return (
-          <div className="space-y-6">
-            <div className="text-center mb-8">
-              <div className="w-20 h-20 mx-auto mb-4 rounded-3xl bg-gradient-to-br from-green-500 via-teal-500 to-cyan-500 flex items-center justify-center shadow-lg">
-                <Camera className="h-10 w-10 text-white" />
+          <div className="space-y-4 sm:space-y-6">
+            <div className="text-center mb-6 sm:mb-8 px-4 sm:px-0">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-3 sm:mb-4 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-green-500 via-teal-500 to-cyan-500 flex items-center justify-center shadow-lg">
+                <Camera className="h-8 w-8 sm:h-10 sm:w-10 text-white" />
               </div>
-              <h2 className="text-2xl font-bold bg-gradient-to-r from-green-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent mb-2">
+              <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-green-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent mb-2">
                 Preview & Share
               </h2>
-              <p className="text-gray-600 dark:text-gray-300">Review your memory and see your collection</p>
+              <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 px-4">Review your memory and see your collection</p>
             </div>
 
             <div className="space-y-6">
@@ -1199,9 +1201,9 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                   </div>
                 </div>
                 
-                {/* Image Previews */}
+                {/* Image Previews - Responsive Grid */}
                 {imagePreviewUrls.length > 0 && (
-                  <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+                  <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
                     {imagePreviewUrls.map((url, index) => (
                       <div key={index} className="relative group">
                         <div className="aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 shadow-sm">
@@ -1233,8 +1235,8 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                   Your Memory
                 </Label>
                 
-                {/* Desktop: Smaller card, Mobile: Full width */}
-                <div className="max-w-lg mx-auto lg:max-w-md">
+                {/* Responsive Preview Card */}
+                <div className="max-w-full sm:max-w-lg mx-auto lg:max-w-md px-2 sm:px-0">
                   <Card className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden shadow-lg">
                     {/* Header with user info */}
                     <div className="p-3 sm:p-4 flex items-center gap-3 border-b border-gray-200 dark:border-gray-700">
@@ -1393,7 +1395,7 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                   </div>
                 ) : savedMemories.length > 0 ? (
                   <>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+                  <div className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-3">
                     {savedMemories.map((memory) => (
                       <div 
                         key={memory.id} 
@@ -1439,17 +1441,19 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                       </div>
                     ))}
                   </div>
-                  {/* Pagination */}
-                  <div className="flex justify-center gap-2 mt-4">
+                  {/* Pagination - Responsive */}
+                  <div className="flex flex-wrap justify-center items-center gap-2 mt-4">
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => setMemoriesPage(p => Math.max(1, p - 1))}
                       disabled={memoriesPage === 1 || isLoadingMemories}
+                      className="text-xs sm:text-sm"
                     >
-                      Previous
+                      <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
+                      <span className="hidden xs:inline">Previous</span>
                     </Button>
-                    <span className="flex items-center px-3 text-sm text-muted-foreground">
+                    <span className="flex items-center px-2 sm:px-3 text-xs sm:text-sm text-muted-foreground">
                       Page {memoriesPage}
                     </span>
                     <Button
@@ -1457,8 +1461,10 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                       size="sm"
                       onClick={() => setMemoriesPage(p => p + 1)}
                       disabled={savedMemories.length < memoriesPerPage || isLoadingMemories}
+                      className="text-xs sm:text-sm"
                     >
-                      Next
+                      <span className="hidden xs:inline">Next</span>
+                      <ChevronRight className="h-3 w-3 sm:h-4 sm:w-4 sm:ml-1" />
                     </Button>
                   </div>
                   </>
@@ -1566,58 +1572,62 @@ export const AddMemoryForm: React.FC<AddMemoryFormProps> = ({
                 {renderStepContent()}
               </div>
               
-              {/* Navigation Buttons */}
-              <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-200/50 dark:border-gray-700/50">
+              {/* Navigation Buttons - Responsive */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-gray-200/50 dark:border-gray-700/50">
+                {/* Previous Button */}
                 <Button 
                   variant="outline"
                   onClick={() => handleStepChange(Math.max(1, currentStep - 1))}
                   disabled={currentStep === 1}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-white/80 dark:bg-gray-800/80 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl transition-all duration-200 disabled:opacity-50"
+                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 bg-white/80 dark:bg-gray-800/80 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg sm:rounded-xl transition-all duration-200 disabled:opacity-50 text-sm sm:text-base"
                 >
                   <ChevronLeft className="h-4 w-4" />
-                  Previous
+                  <span>Previous</span>
                 </Button>
                 
-                <div className="flex items-center gap-3">
+                {/* Step Indicators */}
+                <div className="flex items-center gap-2 sm:gap-3 order-first sm:order-none">
                   {Array.from({ length: totalSteps }, (_, i) => (
                     <button
                       key={i}
                       onClick={() => handleStepChange(i + 1)}
                       disabled={i + 1 > currentStep && !canProceedToNext()}
-                      className={`w-3 h-3 rounded-full transition-all duration-300 hover:scale-125 focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:cursor-not-allowed ${
+                      className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full transition-all duration-300 hover:scale-125 focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:cursor-not-allowed ${
                         i + 1 <= currentStep 
                           ? 'bg-gradient-to-r from-blue-500 to-purple-500 shadow-md cursor-pointer' 
                           : 'bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 cursor-pointer'
                       }`}
                       title={`Go to step ${i + 1}`}
+                      aria-label={`Step ${i + 1}`}
                     />
                   ))}
                 </div>
                 
+                {/* Next / Save Button */}
                 {currentStep < totalSteps ? (
                   <Button 
                     onClick={() => handleStepChange(Math.min(totalSteps, currentStep + 1))}
                     disabled={!canProceedToNext()}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-blue-500 via-purple-500 to-cyan-500 hover:from-blue-600 hover:via-purple-600 hover:to-cyan-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed group"
+                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-blue-500 via-purple-500 to-cyan-500 hover:from-blue-600 hover:via-purple-600 hover:to-cyan-600 text-white rounded-lg sm:rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed group text-sm sm:text-base font-medium"
                   >
-                    Next
+                    <span>Next</span>
                     <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform duration-200" />
                   </Button>
                 ) : (
                   <Button 
                     onClick={handleSubmit}
                     disabled={!canProceedToNext() || isSubmitting}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 hover:from-green-600 hover:via-emerald-600 hover:to-teal-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed group min-w-[120px]"
+                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 hover:from-green-600 hover:via-emerald-600 hover:to-teal-600 text-white rounded-lg sm:rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed group min-w-[120px] text-sm sm:text-base font-medium"
                   >
                     {isSubmitting ? (
                       <>
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        Saving...
+                        <span>Saving...</span>
                       </>
                     ) : (
                       <>
                         <Save className="h-4 w-4 group-hover:scale-110 transition-transform duration-200" />
-                        Save Memory
+                        <span>Save Memory</span>
                       </>
                     )}
                   </Button>

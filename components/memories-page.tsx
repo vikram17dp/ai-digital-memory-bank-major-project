@@ -20,7 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 import {
   Star,
   MoreVertical,
@@ -39,7 +39,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Image as ImageIcon,
+  Clock,
 } from "lucide-react"
+import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 
 interface Memory {
@@ -63,7 +65,6 @@ interface MemoriesPageProps {
 
 export function MemoriesPage({ onSectionChange }: MemoriesPageProps = {}) {
   const { user } = useUser()
-  const { toast } = useToast()
   const [memories, setMemories] = useState<Memory[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<"all" | "favorites">("all")
@@ -81,7 +82,13 @@ export function MemoriesPage({ onSectionChange }: MemoriesPageProps = {}) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [viewingMemory, setViewingMemory] = useState<Memory | null>(null)
   const [cardImageIndices, setCardImageIndices] = useState<Record<string, number>>({})
+  const [modalImageIndex, setModalImageIndex] = useState(0)
   const [currentPage, setCurrentPage] = useState(1)
+  
+  // Reset modal image index when viewing a different memory
+  useEffect(() => {
+    setModalImageIndex(0)
+  }, [viewingMemory?.id])
   const memoriesPerPage = 9 // 3x3 grid on desktop
 
   useEffect(() => {
@@ -90,13 +97,13 @@ export function MemoriesPage({ onSectionChange }: MemoriesPageProps = {}) {
     }
   }, [user?.id])
 
-  // Auto-refresh every 2 minutes when on the page
+  // Auto-refresh every 5 minutes when on the page
   useEffect(() => {
     if (!user?.id) return
     
     const interval = setInterval(() => {
       fetchMemories()
-    }, 120000) // 2 minutes (120 seconds)
+    }, 300000) // 5 minutes (300 seconds)
     
     return () => clearInterval(interval)
   }, [user?.id])
@@ -104,10 +111,7 @@ export function MemoriesPage({ onSectionChange }: MemoriesPageProps = {}) {
   const fetchMemories = async (showToast = false) => {
     try {
       if (showToast) {
-        toast({
-          title: "Refreshing...",
-          description: "Loading latest memories",
-        })
+        toast.loading("Loading latest memories...", { id: "refresh-memories" })
       }
       setLoading(true)
       const response = await fetch("/api/memories/list", {
@@ -116,27 +120,15 @@ export function MemoriesPage({ onSectionChange }: MemoriesPageProps = {}) {
         },
       })
       const data = await response.json()
-      console.log('[Memories Page] Fetched memories:', data)
-      // Log images array for each memory
-      data.memories?.forEach((mem: any, idx: number) => {
-        console.log(`[Memories Page] Memory ${idx}: ${mem.title}, Images: ${mem.images?.length || 0}`, mem.images)
-      })
       if (data.success) {
         setMemories(data.memories)
         if (showToast) {
-          toast({
-            title: "Refreshed!",
-            description: `Loaded ${data.memories.length} memories`,
-          })
+          toast.success(`Loaded ${data.memories.length} memories`, { id: "refresh-memories", duration: 2000 })
         }
       }
     } catch (error) {
       console.error("Failed to fetch memories:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load memories",
-        variant: "destructive",
-      })
+      toast.error("Failed to load memories", { duration: 2500 })
     } finally {
       setLoading(false)
     }
@@ -162,19 +154,13 @@ export function MemoriesPage({ onSectionChange }: MemoriesPageProps = {}) {
             m.id === memoryId ? { ...m, isFavorite: !currentState } : m
           )
         )
-        toast({
-          title: !currentState ? "⭐ Added to Favorites" : "Removed from Favorites",
-          description: !currentState 
-            ? "Memory saved to your favorites collection" 
-            : "Memory removed from favorites",
-        })
+        toast.success(
+          !currentState ? "⭐ Added to favorites!" : "✨ Removed from favorites",
+          { duration: 2000 }
+        )
       }
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update favorite",
-        variant: "destructive",
-      })
+      toast.error("Failed to update favorite", { duration: 2500 })
     }
   }
 
@@ -223,17 +209,10 @@ export function MemoriesPage({ onSectionChange }: MemoriesPageProps = {}) {
           prev.map((m) => (m.id === memoryId ? { ...m, ...editForm } : m))
         )
         setEditingId(null)
-        toast({
-          title: "Success",
-          description: "Memory updated successfully",
-        })
+        toast.success("✅ Memory updated successfully", { duration: 2000 })
       }
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update memory",
-        variant: "destructive",
-      })
+      toast.error("Failed to update memory", { duration: 2500 })
     }
   }
 
@@ -251,17 +230,10 @@ export function MemoriesPage({ onSectionChange }: MemoriesPageProps = {}) {
       const data = await response.json()
       if (data.success) {
         setMemories((prev) => prev.filter((m) => m.id !== memoryId))
-        toast({
-          title: "Success",
-          description: "Memory deleted successfully",
-        })
+        toast.success("🗑️ Memory deleted successfully", { duration: 2000 })
       }
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to delete memory",
-        variant: "destructive",
-      })
+      toast.error("Failed to delete memory", { duration: 2500 })
     }
   }
 
@@ -383,8 +355,11 @@ export function MemoriesPage({ onSectionChange }: MemoriesPageProps = {}) {
               onMouseEnter={() => setHoveredId(memory.id)}
               onMouseLeave={() => setHoveredId(null)}
             >
-              {/* Image Section */}
-              <div className="relative h-56 bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex-shrink-0 group">
+              {/* Image Section - Clickable to open View Details */}
+              <div 
+                className="relative h-56 bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex-shrink-0 group cursor-pointer"
+                onClick={() => setViewingMemory(memory)}
+              >
                 {(() => {
                   const hasImages = memory.images && memory.images.length > 0
                   const displayImages = hasImages ? memory.images : (memory.imageUrl ? [memory.imageUrl] : [])
@@ -414,10 +389,10 @@ export function MemoriesPage({ onSectionChange }: MemoriesPageProps = {}) {
                                   [memory.id]: (currentIndex - 1 + displayImages.length) % displayImages.length
                                 }))
                               }}
-                              className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-1.5 sm:p-2 rounded-full transition-colors z-20 opacity-0 group-hover:opacity-100"
+                              className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white w-8 h-8 rounded-full transition-all z-20 opacity-0 group-hover:opacity-100 flex items-center justify-center"
                               aria-label="Previous image"
                             >
-                              <ChevronLeft className="w-3 h-3 sm:w-4 sm:h-4" />
+                              <ChevronLeft className="w-4 h-4" />
                             </button>
                             <button
                               onMouseDown={(e) => {
@@ -432,10 +407,10 @@ export function MemoriesPage({ onSectionChange }: MemoriesPageProps = {}) {
                                   [memory.id]: (currentIndex + 1) % displayImages.length
                                 }))
                               }}
-                              className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-1.5 sm:p-2 rounded-full transition-colors z-20 opacity-0 group-hover:opacity-100"
+                              className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white w-8 h-8 rounded-full transition-all z-20 opacity-0 group-hover:opacity-100 flex items-center justify-center"
                               aria-label="Next image"
                             >
-                              <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4" />
+                              <ChevronRight className="w-4 h-4" />
                             </button>
                             {/* Image Counter */}
                             <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-sm px-2.5 py-1.5 rounded-full text-xs text-white flex items-center gap-1.5">
@@ -459,8 +434,11 @@ export function MemoriesPage({ onSectionChange }: MemoriesPageProps = {}) {
 
                 {/* Favorite Star - Top Right */}
                 <button
-                  onClick={() => toggleFavorite(memory.id, memory.isFavorite)}
-                  className="absolute top-3 right-3 p-2 rounded-full bg-black/50 hover:bg-black/70 transition-all"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggleFavorite(memory.id, memory.isFavorite)
+                  }}
+                  className="absolute top-3 right-3 p-2 rounded-full bg-black/50 hover:bg-black/70 transition-all z-10"
                 >
                   <Star
                     className={cn(
@@ -471,7 +449,7 @@ export function MemoriesPage({ onSectionChange }: MemoriesPageProps = {}) {
                 </button>
 
                 {/* Three Dot Menu - Top Right (below star) */}
-                <div className="absolute top-14 right-3">
+                <div className="absolute top-14 right-3 z-10" onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
@@ -714,61 +692,155 @@ export function MemoriesPage({ onSectionChange }: MemoriesPageProps = {}) {
 
       {/* View Details Modal */}
       <Dialog open={!!viewingMemory} onOpenChange={() => setViewingMemory(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-gradient-to-br from-gray-900 to-gray-800 border-gray-700">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-bold">{viewingMemory?.title}</DialogTitle>
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <DialogTitle className="text-2xl font-bold text-white mb-2">
+                  {viewingMemory?.title || 'Untitled Memory'}
+                </DialogTitle>
+                <div className="flex items-center gap-3 flex-wrap text-sm text-muted-foreground mt-2">
+                  <div className="flex items-center gap-1 text-gray-400">
+                    <Calendar className="w-4 h-4" />
+                    <span>{viewingMemory && new Date(viewingMemory.date).toLocaleDateString()}</span>
+                  </div>
+                  {viewingMemory?.mood && (
+                    <Badge variant="outline" className={cn("capitalize", getMoodColor(viewingMemory.mood))}>
+                      {viewingMemory.mood}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => viewingMemory && toggleFavorite(viewingMemory.id, viewingMemory.isFavorite)}
+                className="hover:bg-gray-700/50"
+              >
+                <Star className={cn(
+                  "w-5 h-5",
+                  viewingMemory?.isFavorite ? "text-yellow-500 fill-yellow-500" : "text-gray-400"
+                )} />
+              </Button>
+            </div>
           </DialogHeader>
+
+          <Separator className="my-4 bg-gray-700" />
+
           {viewingMemory && (
-            <div className="space-y-6">
-              {/* Image */}
-              {viewingMemory.imageUrl && (
-                <div className="w-full h-64 rounded-lg overflow-hidden">
-                  <img
-                    src={viewingMemory.imageUrl}
-                    alt={viewingMemory.title}
-                    className="w-full h-full object-cover"
-                  />
+            <>
+              {/* Images Gallery */}
+              {viewingMemory.images && viewingMemory.images.length > 0 && (
+                <div className="mb-6">
+                  <div className="relative rounded-lg overflow-hidden bg-black">
+                    <img
+                      src={viewingMemory.images[modalImageIndex]}
+                      alt={`Memory image ${modalImageIndex + 1}`}
+                      className="w-full h-96 object-contain"
+                    />
+                    {viewingMemory.images.length > 1 && (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setModalImageIndex((prev) => (prev - 1 + viewingMemory.images!.length) % viewingMemory.images!.length)
+                          }}
+                          className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white w-12 h-12 rounded-full transition-all z-10 flex items-center justify-center shadow-lg"
+                          aria-label="Previous image"
+                        >
+                          <ChevronLeft className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setModalImageIndex((prev) => (prev + 1) % viewingMemory.images!.length)
+                          }}
+                          className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white w-12 h-12 rounded-full transition-all z-10 flex items-center justify-center shadow-lg"
+                          aria-label="Next image"
+                        >
+                          <ChevronRight className="w-5 h-5" />
+                        </button>
+                        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/70 backdrop-blur-sm px-3 py-1 rounded-full text-sm text-white">
+                          {modalImageIndex + 1} / {viewingMemory.images.length}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  {/* Image Thumbnails */}
+                  {viewingMemory.images.length > 1 && (
+                    <div className="flex gap-2 mt-3 overflow-x-auto pb-2">
+                      {viewingMemory.images.map((img, idx) => (
+                        <button
+                          key={idx}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setModalImageIndex(idx)
+                          }}
+                          className={cn(
+                            "flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all",
+                            idx === modalImageIndex ? "border-primary" : "border-gray-700 hover:border-gray-500"
+                          )}
+                        >
+                          <img src={img} alt={`Thumbnail ${idx + 1}`} className="w-full h-full object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Metadata */}
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <span>{new Date(viewingMemory.date).toLocaleDateString()}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge className={getMoodColor(viewingMemory.mood)}>
-                    {viewingMemory.mood}
-                  </Badge>
-                </div>
+              {/* Content */}
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-white mb-3">Description</h3>
+                <p className="text-gray-300 leading-relaxed whitespace-pre-wrap">{viewingMemory.content}</p>
+              </div>
+
+              {/* Metadata Grid */}
+              <div className="grid grid-cols-2 gap-4 mb-6">
                 {viewingMemory.location && (
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-muted-foreground" />
-                    <span>{viewingMemory.location}</span>
+                  <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                    <div className="flex items-center gap-2 mb-2">
+                      <MapPin className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-semibold text-gray-400">Location</span>
+                    </div>
+                    <p className="text-white">{viewingMemory.location}</p>
                   </div>
                 )}
                 {viewingMemory.people && (
-                  <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 text-muted-foreground" />
-                    <span>{viewingMemory.people}</span>
+                  <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Users className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-semibold text-gray-400">People</span>
+                    </div>
+                    <p className="text-white">{viewingMemory.people}</p>
                   </div>
                 )}
-              </div>
-
-              {/* Content */}
-              <div>
-                <h4 className="font-semibold mb-2">Description</h4>
-                <p className="text-muted-foreground whitespace-pre-wrap">{viewingMemory.content}</p>
+                <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Clock className="w-4 h-4 text-primary" />
+                    <span className="text-sm font-semibold text-gray-400">Created</span>
+                  </div>
+                  <p className="text-white">{getTimeAgo(viewingMemory.createdAt)}</p>
+                  <p className="text-sm text-gray-400 mt-1">{new Date(viewingMemory.date).toLocaleDateString()}</p>
+                </div>
+                {viewingMemory.mood && (
+                  <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Heart className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-semibold text-gray-400">Mood</span>
+                    </div>
+                    <p className="text-white capitalize">{viewingMemory.mood}</p>
+                  </div>
+                )}
               </div>
 
               {/* Tags */}
               {viewingMemory.tags && viewingMemory.tags.length > 0 && (
-                <div>
-                  <h4 className="font-semibold mb-2">Tags</h4>
+                <div className="mb-4">
+                  <h3 className="text-lg font-semibold text-white mb-3">Tags</h3>
                   <div className="flex flex-wrap gap-2">
                     {viewingMemory.tags.map((tag, idx) => (
-                      <Badge key={idx} variant="secondary" className="bg-green-500/10 text-green-600 dark:text-green-400">
+                      <Badge key={idx} variant="outline" className="bg-primary/10 text-primary border-primary/20">
                         #{tag}
                       </Badge>
                     ))}
@@ -777,30 +849,40 @@ export function MemoriesPage({ onSectionChange }: MemoriesPageProps = {}) {
               )}
 
               {/* Actions */}
-              <div className="flex gap-2 pt-4 border-t">
-                <Button
+              <div className="flex gap-3 pt-4 border-t border-gray-700">
+                <Button 
+                  variant="outline" 
+                  className="flex-1"
+                  onClick={() => toggleFavorite(viewingMemory.id, viewingMemory.isFavorite)}
+                >
+                  <Star className={cn(
+                    "w-4 h-4 mr-2",
+                    viewingMemory.isFavorite ? "fill-yellow-500 text-yellow-500" : ""
+                  )} />
+                  {viewingMemory.isFavorite ? "Remove from Favorites" : "Add to Favorites"}
+                </Button>
+                <Button 
+                  variant="outline"
+                  className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
                   onClick={() => {
                     startEdit(viewingMemory)
                     setViewingMemory(null)
                   }}
-                  className="flex-1"
                 >
-                  <Edit3 className="h-4 w-4 mr-2" />
-                  Edit
+                  <Edit3 className="w-4 h-4" />
                 </Button>
-                <Button
-                  onClick={() => {
-                    toggleFavorite(viewingMemory.id, viewingMemory.isFavorite)
-                    setViewingMemory({ ...viewingMemory, isFavorite: !viewingMemory.isFavorite })
-                  }}
+                <Button 
                   variant="outline"
-                  className="flex-1"
+                  className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                  onClick={() => {
+                    deleteMemory(viewingMemory.id)
+                    setViewingMemory(null)
+                  }}
                 >
-                  <Star className={cn("h-4 w-4 mr-2", viewingMemory.isFavorite && "fill-yellow-400 text-yellow-400")} />
-                  {viewingMemory.isFavorite ? "Remove from Favorites" : "Add to Favorites"}
+                  <Trash2 className="w-4 w-4" />
                 </Button>
               </div>
-            </div>
+            </>
           )}
         </DialogContent>
       </Dialog>

@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Bot,
   User,
@@ -17,12 +17,14 @@ import {
   Heart,
   ThumbsUp,
   Copy,
+  Check,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useToast } from '@/components/ui/use-toast';
 
 interface Reaction {
   emoji: string;
@@ -35,6 +37,7 @@ interface Message {
   content: string;
   timestamp: string;
   reactions: Reaction[];
+  followUps?: string[];
 }
 
 interface ChatInterfaceProps {
@@ -48,7 +51,11 @@ interface ChatInterfaceProps {
   onSectionChange?: (section: string) => void; // Optional, in case you need it
 }
 
+import { useRouter } from 'next/navigation';
+
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ user }) => {
+  const router = useRouter();
+  const { toast } = useToast();
   const [message, setMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -56,15 +63,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ user }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 1,
-      type: 'bot',
-      content: `Hello ${user?.firstName || 'there'}! ✨ I'm Memo, your AI memory assistant. I can help you search through your memories, create new ones, analyze your mood patterns, or answer questions about your stored information. What would you like to do today?`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      reactions: [],
-    },
-  ]);
+  // lightweight context to pass to AI for better summaries
+  const [conversationContext, setConversationContext] = useState<Array<{ role: 'user'|'bot'; content: string }>>([]);
+
+  // Static welcome message - computed once based on user name
+  const initialMessage = useMemo<Message>(() => ({
+    id: 1,
+    type: 'bot',
+    content: `Hello ${user?.firstName || 'there'}! ✨ I'm Memo, your AI memory assistant. I can help you search through your memories, create new ones, analyze your mood patterns, or answer questions about your stored information. What would you like to do today?`,
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    reactions: [],
+  }), [user?.firstName]);
+
+  const [messages, setMessages] = useState<Message[]>([initialMessage]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -78,28 +89,28 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ user }) => {
     {
       label: 'Search my memories',
       icon: Search,
-      action: 'search',
+      action: 'search_memories',
       color: 'from-blue-500 to-cyan-500',
       description: 'Find specific memories instantly',
     },
     {
       label: 'Create a new memory',
       icon: Plus,
-      action: 'create',
+      action: 'create_memory',
       color: 'from-green-500 to-emerald-500',
       description: 'Add a new memory with AI help',
     },
     {
       label: 'Show recent memories',
       icon: List,
-      action: 'recent',
+      action: 'show_recent_memories',
       color: 'from-purple-500 to-pink-500',
       description: 'View your latest memories',
     },
     {
       label: 'Analyze my mood patterns',
       icon: TrendingUp,
-      action: 'analyze',
+      action: 'analyze_mood',
       color: 'from-orange-500 to-red-500',
       description: 'Understand your emotional journey',
     },
@@ -127,6 +138,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ user }) => {
     };
 
     setMessages((prev) => [...prev, userMessage]);
+    setConversationContext((ctx) => [...ctx, { role: 'user', content: message }].slice(-8));
     const currentMessage = message;
     setMessage('');
     setIsTyping(true);
@@ -154,6 +166,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ user }) => {
 
       setMessages((prev) => [...prev, botMessage]);
       showFullMessage(data.message, botMessage.id);
+      setConversationContext((ctx) => [...ctx, { role: 'bot', content: data.message }].slice(-8));
     } catch (error) {
       console.error('Error sending message:', error);
       const errorMessage: Message = {
@@ -170,11 +183,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ user }) => {
   };
 
   const handleReaction = (messageId: number, emoji: string) => {
-    setMessages((prev) =>
-      prev.map((msg) => {
+    console.log('handleReaction called:', { messageId, emoji });
+    setMessages((prev) => {
+      const updated = prev.map((msg) => {
         if (msg.id === messageId) {
           const reactions = [...(msg.reactions || [])];
           const existingReactionIndex = reactions.findIndex((r) => r.emoji === emoji);
+          console.log('Found message, existing reactions:', reactions);
           if (existingReactionIndex >= 0) {
             reactions[existingReactionIndex] = {
               ...reactions[existingReactionIndex],
@@ -183,11 +198,36 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ user }) => {
           } else {
             reactions.push({ emoji, count: 1 });
           }
+          console.log('Updated reactions:', reactions);
           return { ...msg, reactions };
         }
         return msg;
-      })
-    );
+      });
+      return updated;
+    });
+    
+    // Show feedback toast
+    const reactionName = emoji === '👍' ? 'Helpful' : emoji === '❤️' ? 'Love it' : 'Reaction';
+    toast({
+      description: `Marked as ${reactionName}`,
+      duration: 2000,
+    });
+  };
+
+  const handleCopy = (content: string) => {
+    navigator.clipboard.writeText(content).then(() => {
+      toast({
+        description: 'Message copied to clipboard',
+        duration: 2000,
+      });
+    }).catch((err) => {
+      console.error('Failed to copy:', err);
+      toast({
+        description: 'Failed to copy message',
+        variant: 'destructive',
+        duration: 2000,
+      });
+    });
   };
 
   const handleVoiceInput = () => {
@@ -195,15 +235,59 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ user }) => {
     // Implement voice recognition here (e.g., Web Speech API)
   };
 
-  const handleQuickAction = (action: string) => {
-    const actionMessages: Record<string, string> = {
-      search: 'Search my memories for recent work projects',
-      create: 'Help me create a new memory about today',
-      recent: 'Show me my recent memories from this week',
-      analyze: 'Analyze my mood patterns from the past month',
-    };
-    setMessage(actionMessages[action] || '');
-  };
+  async function analyzeAndRespond(action: string, apiData: any) {
+    const res = await fetch('/api/ai/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, apiData, userId: user.id, userName: user.firstName, context: conversationContext }),
+    })
+    if (!res.ok) throw new Error('AI analyze failed')
+    return res.json()
+  }
+
+  async function handleQuickAction(action: 'search_memories'|'show_recent_memories'|'analyze_mood'|'create_memory') {
+    setIsTyping(true)
+    setStreamingMessageId(null) // Reset streaming state
+
+    // Insert a temporary bot bubble with typing cursor
+    const pendingId = Date.now() + Math.floor(Math.random()*1000)
+    const pending: Message = { id: pendingId, type: 'bot', content: '', timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), reactions: [] }
+    setMessages((prev) => [...prev, pending])
+    setStreamingMessageId(pendingId) // Set streaming state for typing indicator
+
+    try {
+      let apiResp: any = null
+      if (action === 'search_memories') {
+        const resp = await fetch('/api/memories/search', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-user-id': user.id } , body: JSON.stringify({ query: '' }) })
+        apiResp = await resp.json()
+      } else if (action === 'show_recent_memories') {
+        const resp = await fetch(`/api/memories/list?limit=5`, { headers: { 'Content-Type': 'application/json', 'x-user-id': user.id } })
+        apiResp = await resp.json()
+      } else if (action === 'analyze_mood') {
+        const resp = await fetch(`/api/memories/analyze?range=30d`, { headers: { 'x-user-id': user.id } })
+        apiResp = await resp.json()
+      } else if (action === 'create_memory') {
+        // Friendly confirmation then redirect
+        const ai = await analyzeAndRespond('create_memory', { ok: true })
+        setMessages((prev) => prev.map((m) => m.id === pendingId ? { ...m, content: ai.message, followUps: ai.followUps } : m))
+        setConversationContext((ctx) => [...ctx, { role: 'bot', content: ai.message }].slice(-8))
+        setStreamingMessageId(null)
+        setIsTyping(false)
+        setTimeout(() => router.push('/memories/create'), 900)
+        return
+      }
+
+      const ai = await analyzeAndRespond(action, apiResp)
+      setMessages((prev) => prev.map((m) => m.id === pendingId ? { ...m, content: ai.message, followUps: ai.followUps } : m))
+      setConversationContext((ctx) => [...ctx, { role: 'bot', content: ai.message }].slice(-8))
+    } catch (e) {
+      console.error('Quick action error:', e)
+      setMessages((prev) => prev.map((m) => m.id === pendingId ? { ...m, content: 'Sorry, I hit a snag while processing that. Try again in a moment.' } : m))
+    } finally {
+      setStreamingMessageId(null)
+      setIsTyping(false)
+    }
+  }
 
   return (
     <TooltipProvider>
@@ -246,7 +330,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ user }) => {
                             msg.type === 'bot'
                               ? 'bg-white/90 dark:bg-gray-800/90 text-gray-800 dark:text-gray-100 rounded-3xl rounded-tl-lg shadow-lg backdrop-blur-sm border border-gray-200/50 dark:border-gray-700/50'
                               : 'bg-gradient-to-r from-blue-500 via-purple-500 to-cyan-500 text-white rounded-3xl rounded-tr-lg shadow-lg'
-                          } p-4 relative overflow-hidden`}
+                          } p-4 relative`}
                         >
                           {msg.type === 'bot' && (
                             <div className="absolute inset-0 opacity-10">
@@ -254,57 +338,73 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ user }) => {
                             </div>
                           )}
                           <div className="relative z-10">
-                            <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                              {msg.content}
-                              {streamingMessageId === msg.id && (
-                                <span className="inline-block w-2 h-4 bg-blue-500 animate-pulse ml-1 rounded-sm"></span>
-                              )}
-                            </p>
+                            {streamingMessageId === msg.id && !msg.content ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-gray-600 dark:text-gray-300">AI is thinking</span>
+                                <div className="flex space-x-1">
+                                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
+                                  <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                                  <div className="w-2 h-2 bg-cyan-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                                {msg.content}
+                              </p>
+                            )}
                           </div>
 
-                          {msg.type === 'bot' && (
+                          {msg.type === 'bot' && msg.content && (
                             <div
-                              className={`flex items-center gap-2 mt-3 pt-2 border-t border-gray-200/50 dark:border-gray-600/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200`}
+                              className={`relative z-20 flex items-center gap-2 mt-3 pt-2 border-t border-gray-200/50 dark:border-gray-600/50 opacity-100 transition-opacity duration-200 flex-wrap`}
                             >
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-6 px-2 text-xs hover:bg-blue-100 dark:hover:bg-blue-900/30"
-                                    onClick={() => handleReaction(msg.id, '👍')}
-                                  >
-                                    <ThumbsUp className="h-3 w-3" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Helpful</TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-6 px-2 text-xs hover:bg-red-100 dark:hover:bg-red-900/30"
-                                    onClick={() => handleReaction(msg.id, '❤️')}
-                                  >
-                                    <Heart className="h-3 w-3" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Love it</TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-6 px-2 text-xs hover:bg-gray-100 dark:hover:bg-gray-700"
-                                    onClick={() => navigator.clipboard.writeText(msg.content)}
-                                  >
-                                    <Copy className="h-3 w-3" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Copy message</TooltipContent>
-                              </Tooltip>
+                              {msg.followUps && msg.followUps.length > 0 && (
+                                <div className="flex items-center gap-2 flex-wrap mr-auto">
+                                  {msg.followUps.map((f, i) => (
+                                    <Button key={i} variant="secondary" size="sm" className="h-6 px-2 text-xs relative z-20"
+                                      onClick={() => {
+                                        if (f.toLowerCase().includes('trend')) handleQuickAction('analyze_mood')
+                                        else if (f.toLowerCase().includes('detail') || f.toLowerCase().includes('open')) handleQuickAction('show_recent_memories')
+                                        else if (f.toLowerCase().includes('refine') || f.toLowerCase().includes('filter')) handleQuickAction('search_memories')
+                                        else if (f.toLowerCase().includes('template') || f.toLowerCase().includes('editor')) handleQuickAction('create_memory')
+                                      }}
+                                    >{f}</Button>
+                                  ))}
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                title="Helpful"
+                                className="relative z-20 h-6 px-2 text-xs rounded hover:bg-blue-100 dark:hover:bg-blue-900/30 active:scale-95 transition-transform inline-flex items-center justify-center cursor-pointer pointer-events-auto"
+                                onClick={() => {
+                                  console.log('Thumbs up clicked!');
+                                  handleReaction(msg.id, '👍');
+                                }}
+                              >
+                                <ThumbsUp className="h-3 w-3 pointer-events-none" />
+                              </button>
+                              <button
+                                type="button"
+                                title="Love it"
+                                className="relative z-20 h-6 px-2 text-xs rounded hover:bg-red-100 dark:hover:bg-red-900/30 active:scale-95 transition-transform inline-flex items-center justify-center cursor-pointer pointer-events-auto"
+                                onClick={() => {
+                                  console.log('Heart clicked!');
+                                  handleReaction(msg.id, '❤️');
+                                }}
+                              >
+                                <Heart className="h-3 w-3 pointer-events-none" />
+                              </button>
+                              <button
+                                type="button"
+                                title="Copy message"
+                                className="relative z-20 h-6 px-2 text-xs rounded hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95 transition-transform inline-flex items-center justify-center cursor-pointer pointer-events-auto"
+                                onClick={() => {
+                                  console.log('Copy clicked!');
+                                  handleCopy(msg.content);
+                                }}
+                              >
+                                <Copy className="h-3 w-3 pointer-events-none" />
+                              </button>
                             </div>
                           )}
                         </div>
@@ -336,35 +436,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ user }) => {
                   </div>
                 ))}
 
-                {isTyping && (
-                  <div className="flex justify-start animate-fadeIn">
-                    <div className="flex items-start gap-4 max-w-4xl">
-                      <div className="relative flex-shrink-0">
-                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-500 via-purple-500 to-cyan-500 flex items-center justify-center shadow-lg ring-2 ring-white/50 dark:ring-gray-800/50">
-                          <Bot className="h-5 w-5 text-white" />
-                        </div>
-                        <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 via-purple-500 to-cyan-500 rounded-3xl blur opacity-50 animate-pulse"></div>
-                      </div>
-                      <div className="bg-white/90 dark:bg-gray-800/90 rounded-3xl rounded-tl-lg shadow-lg backdrop-blur-sm border border-gray-200/50 dark:border-gray-700/50 p-4">
-                        <div className="flex items-center gap-1">
-                          <span className="text-sm text-gray-600 dark:text-gray-300 mr-2">AI is thinking</span>
-                          <div className="flex space-x-1">
-                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
-                            <div
-                              className="w-2 h-2 bg-purple-500 rounded-full animate-bounce"
-                              style={{ animationDelay: '0.1s' }}
-                            ></div>
-                            <div
-                              className="w-2 h-2 bg-cyan-500 rounded-full animate-bounce"
-                              style={{ animationDelay: '0.2s' }}
-                            ></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
                 <div ref={messagesEndRef} />
               </div>
 
@@ -383,14 +454,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ user }) => {
                     </Badge>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {quickActions.map((action, index) => (
                       <Tooltip key={action.action}>
                         <TooltipTrigger asChild>
                           <Button
                             variant="ghost"
-                            onClick={() => handleQuickAction(action.action)}
-                            className="group h-auto p-4 bg-white/80 dark:bg-gray-800/80 hover:bg-gradient-to-r hover:shadow-lg border border-gray-200/60 dark:border-gray-700/60 rounded-2xl transition-all duration-300 hover:scale-[1.02] text-left justify-start relative overflow-hidden backdrop-blur-sm"
+                            onClick={() => handleQuickAction(action.action as any)}
+                            className="group h-auto p-3 sm:p-4 bg-white/80 dark:bg-gray-800/80 hover:bg-gradient-to-r hover:shadow-lg border border-gray-200/60 dark:border-gray-700/60 rounded-2xl transition-all duration-300 hover:scale-[1.02] text-left justify-start relative overflow-hidden backdrop-blur-sm"
                             style={{ animationDelay: `${index * 0.1}s` }}
                           >
                             <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
@@ -398,15 +469,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ user }) => {
                             </div>
                             <div className="relative flex items-center gap-3 w-full">
                               <div
-                                className={`w-10 h-10 bg-gradient-to-r ${action.color} rounded-xl flex items-center justify-center flex-shrink-0 shadow-md group-hover:shadow-lg group-hover:scale-110 transition-all duration-300`}
+                                className={`w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r ${action.color} rounded-xl flex items-center justify-center flex-shrink-0 shadow-md group-hover:shadow-lg group-hover:scale-110 transition-all duration-300`}
                               >
-                                <action.icon className="h-5 w-5 text-white" />
+                                <action.icon className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="font-semibold text-gray-900 dark:text-white text-sm group-hover:text-transparent group-hover:bg-gradient-to-r group-hover:bg-clip-text group-hover:from-gray-900 group-hover:to-gray-600 dark:group-hover:from-white dark:group-hover:to-gray-200 transition-all duration-300">
+                                <p className="font-semibold text-gray-900 dark:text-white text-xs sm:text-sm group-hover:text-transparent group-hover:bg-gradient-to-r group-hover:bg-clip-text group-hover:from-gray-900 group-hover:to-gray-600 dark:group-hover:from-white dark:group-hover:to-gray-200 transition-all duration-300">
                                   {action.label}
                                 </p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-1">
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-1 hidden sm:block">
                                   {action.description}
                                 </p>
                               </div>

@@ -469,7 +469,7 @@ export function DashboardContent({ activeSection = 'dashboard', onSectionChange 
               <h1 className="text-3xl font-bold mb-2">Search Memories</h1>
               <p className="text-muted-foreground">Find and explore your memories with advanced filtering</p>
             </div>
-            <SearchInterface user={user} memories={memories} onSectionChange={onSectionChange} />
+            <SearchInterface user={user} onSectionChange={onSectionChange} />
           </div>
         )
       

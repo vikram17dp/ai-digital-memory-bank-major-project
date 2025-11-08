@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { auth, currentUser } from "@clerk/nextjs/server"
 import { prisma } from "@/lib/prisma"
 import { uploadToS3, deleteFromS3 } from "@/lib/s3"
 
@@ -9,10 +10,35 @@ const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
 export async function POST(request: NextRequest) {
   try {
+    // Try to get auth from Clerk, fallback to headers/formData
+    let userId: string | null = null
+    let email: string = ""
+
+    try {
+      const authResult = auth()
+      userId = authResult.userId
+      if (userId) {
+        const clerkUser = await currentUser()
+        email = clerkUser?.emailAddresses?.[0]?.emailAddress || ""
+      }
+    } catch (authError) {
+      console.log("[Image Upload] Clerk auth failed, using headers/formData")
+    }
+
     const formData = await request.formData()
-    const userId = formData.get("userId") as string || request.headers.get('x-user-id') || 'anonymous'
     const file = formData.get("file") as File
     const type = formData.get("type") as "profile" | "background"
+
+    // Fallback to headers or formData if Clerk auth failed
+    if (!userId) {
+      userId = formData.get("userId") as string || request.headers.get('x-user-id')
+    }
+
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    console.log("[Image Upload] userId:", userId, "type:", type)
 
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 })
@@ -66,12 +92,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get user email from Clerk if creating profile
-    let email = existingProfile?.email
+    // Get user email from profile or Clerk
     if (!email) {
-      const { clerkClient } = await import("@clerk/nextjs/server")
-      const user = await (await clerkClient()).users.getUser(userId)
-      email = user?.emailAddresses?.[0]?.emailAddress || ""
+      email = existingProfile?.email || ""
     }
 
     // Update user profile with S3 image URL

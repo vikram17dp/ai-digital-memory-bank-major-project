@@ -10,9 +10,7 @@ export async function GET(request: NextRequest) {
 
     const memories = await prisma.memory.findMany({
       where: {
-        user: {
-          clerkId: userId,
-        },
+        userId: userId,
       },
       orderBy: {
         createdAt: "desc",
@@ -31,15 +29,6 @@ export async function POST(request: NextRequest) {
     const userId = request.headers.get('x-user-id') || 'anonymous';
     const { title, content, tags, imageUrl } = await request.json()
 
-    // Get user from database
-    const user = await prisma.user.findUnique({
-      where: { clerkId: userId },
-    })
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
-    }
-
     // Create memory with basic data first
     const memory = await prisma.memory.create({
       data: {
@@ -47,7 +36,7 @@ export async function POST(request: NextRequest) {
         content,
         tags: tags || [],
         imageUrl,
-        userId: user.id,
+        userId: userId,
         sentiment: "neutral", // Default sentiment
       },
     })

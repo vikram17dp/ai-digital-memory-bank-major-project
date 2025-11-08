@@ -19,7 +19,9 @@ import {
   Eye,
   BookOpen,
   Image,
-  FileText
+  FileText,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -95,6 +97,19 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
     favoritesOnly: false
   })
   const [sortBy, setSortBy] = useState('date-desc')
+  
+  // Force reset filters on component mount (prevents stale state from React Fast Refresh)
+  useEffect(() => {
+    setFilters({
+      mood: '',
+      timeRange: 'all',
+      tags: [],
+      location: '',
+      people: '',
+      hasImages: false,
+      favoritesOnly: false
+    })
+  }, []) // Empty dependency array = run only once on mount
   const actualMemories = memories || apiMemories
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [suggestions, setSuggestions] = useState<string[]>([])
@@ -102,6 +117,15 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
   const [searchHistory, setSearchHistory] = useState<string[]>([])
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1)
+  const memoriesPerPage = 9 // 3x3 grid
+  
+  // Reset to page 1 when search results change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchResults.length, searchQuery, filters, sortBy])
 
   // Fetch memories from API if not provided via props
   useEffect(() => {
@@ -110,45 +134,49 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
         // Use memories from props if provided
         setApiMemories(memories)
         setSearchResults(memories)
-      } else if (user?.id) {
-        // Fetch from API if not provided
-        setIsLoadingMemories(true)
-        try {
-          const response = await fetch('/api/memories/list', {
-            headers: {
-              'x-user-id': user.id,
-            },
+        return
+      }
+      
+      if (!user?.id) {
+        return
+      }
+      
+      // Fetch from API if we have user ID and no prop memories
+      setIsLoadingMemories(true)
+      try {
+        const response = await fetch('/api/memories/list', {
+          headers: {
+            'x-user-id': user.id,
+          },
+        })
+        const data = await response.json()
+        if (data.success && data.memories) {
+          setApiMemories(data.memories)
+          setSearchResults(data.memories)
+          
+          // Generate search history from user's actual data
+          const userSearchTerms: string[] = []
+          data.memories.forEach((mem: any) => {
+            // Add unique locations
+            if (mem.location && !userSearchTerms.includes(mem.location)) {
+              userSearchTerms.push(mem.location)
+            }
+            // Add unique tags (first few)
+            if (mem.tags && Array.isArray(mem.tags)) {
+              mem.tags.slice(0, 2).forEach((tag: string) => {
+                if (!userSearchTerms.includes(tag)) {
+                  userSearchTerms.push(tag)
+                }
+              })
+            }
           })
-          const data = await response.json()
-          if (data.success && data.memories) {
-            console.log('[Search] Loaded memories from API:', data.memories.length)
-            setApiMemories(data.memories)
-            setSearchResults(data.memories)
-            
-            // Generate search history from user's actual data
-            const userSearchTerms: string[] = []
-            data.memories.forEach((mem: any) => {
-              // Add unique locations
-              if (mem.location && !userSearchTerms.includes(mem.location)) {
-                userSearchTerms.push(mem.location)
-              }
-              // Add unique tags (first few)
-              if (mem.tags && Array.isArray(mem.tags)) {
-                mem.tags.slice(0, 2).forEach((tag: string) => {
-                  if (!userSearchTerms.includes(tag)) {
-                    userSearchTerms.push(tag)
-                  }
-                })
-              }
-            })
-            // Keep only first 5 unique terms
-            setSearchHistory(userSearchTerms.slice(0, 5))
-          }
-        } catch (error) {
-          console.error('[Search] Failed to fetch memories:', error)
-        } finally {
-          setIsLoadingMemories(false)
+          // Keep only first 5 unique terms
+          setSearchHistory(userSearchTerms.slice(0, 5))
         }
+      } catch (error) {
+        console.error('[Search] Failed to fetch memories:', error)
+      } finally {
+        setIsLoadingMemories(false)
       }
     }
     fetchMemories()
@@ -284,8 +312,6 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
       return () => clearTimeout(searchTimer)
     } else {
       // Apply filters even when no search query
-      console.log('[Search] Filtering with:', { filters, totalMemories: actualMemories.length })
-      
       const filtered = actualMemories.filter(memory => {
         const matchesMood = !filters.mood || memory.mood === filters.mood
         const matchesTags = filters.tags.length === 0 || filters.tags.every(tag => memory.tags.includes(tag))
@@ -295,23 +321,8 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
         const matchesFavorites = !filters.favoritesOnly || memory.isFavorite
         const matchesTimeRange = isWithinTimeRange(memory.date || memory.createdAt, filters.timeRange)
         
-        // Debug individual memory
-        if (filters.location && memory.location) {
-          console.log('[Search] Checking:', {
-            memoryTitle: memory.title,
-            memoryLocation: memory.location,
-            filterLocation: filters.location,
-            matchesLocation,
-            memoryPeople: memory.people,
-            filterPeople: filters.people,
-            matchesPeople
-          })
-        }
-        
         return matchesMood && matchesTags && matchesLocation && matchesPeople && matchesImages && matchesFavorites && matchesTimeRange
       })
-      
-      console.log('[Search] Filtered results:', filtered.length)
       
       // Sort filtered results
       const sorted = [...filtered].sort((a, b) => {
@@ -336,7 +347,7 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
       setShowSuggestions(false)
       setIsSearching(false)
     }
-  }, [searchQuery, filters, sortBy])
+  }, [searchQuery, filters, sortBy, actualMemories])
 
   const handleSearch = (query: string) => {
     setSearchQuery(query)
@@ -877,11 +888,16 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h2 className="text-xl lg:text-2xl font-bold text-gray-800 dark:text-gray-200">
-                  {isSearching ? 'Searching...' : `Found ${searchResults.length} memories`}
+                  {isSearching ? 'Searching...' : `Found ${searchResults.length} ${searchResults.length === 1 ? 'memory' : 'memories'}`}
                 </h2>
                 {searchQuery && (
                   <p className="text-sm lg:text-base text-gray-600 dark:text-gray-400 mt-1">
                     Results for "<span className="font-semibold text-blue-600 dark:text-blue-400">{searchQuery}</span>"
+                  </p>
+                )}
+                {searchResults.length > memoriesPerPage && (
+                  <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                    Page {currentPage} of {Math.ceil(searchResults.length / memoriesPerPage)}
                   </p>
                 )}
               </div>
@@ -925,19 +941,82 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
             
             {/* Search Results */}
             {!isSearching && !isLoadingMemories && searchResults.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
-                {searchResults.map((memory, index) => (
-                  <div
-                    key={memory.id}
-                    className="animate-fadeIn"
-                    style={{ 
-                      animationDelay: `${index * 0.1}s`,
-                    }}
-                  >
-                    <MemoryCard memory={memory} />
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+                  {searchResults
+                    .slice((currentPage - 1) * memoriesPerPage, currentPage * memoriesPerPage)
+                    .map((memory, index) => (
+                      <div
+                        key={memory.id}
+                        className="animate-fadeIn"
+                        style={{ 
+                          animationDelay: `${index * 0.1}s`,
+                        }}
+                      >
+                        <MemoryCard memory={memory} />
+                      </div>
+                    ))}
+                </div>
+                
+                {/* Pagination */}
+                {searchResults.length > memoriesPerPage && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-gray-200 dark:border-gray-700">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Showing {((currentPage - 1) * memoriesPerPage) + 1}-{Math.min(currentPage * memoriesPerPage, searchResults.length)} of {searchResults.length} memories
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                        className="flex items-center gap-1"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        <span className="hidden sm:inline">Previous</span>
+                      </Button>
+                      
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: Math.ceil(searchResults.length / memoriesPerPage) }, (_, i) => i + 1).map((page) => {
+                          const totalPages = Math.ceil(searchResults.length / memoriesPerPage)
+                          // Show first page, last page, current page, and pages around current
+                          if (
+                            page === 1 ||
+                            page === totalPages ||
+                            (page >= currentPage - 1 && page <= currentPage + 1)
+                          ) {
+                            return (
+                              <Button
+                                key={page}
+                                variant={currentPage === page ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setCurrentPage(page)}
+                                className="w-8 h-8 p-0"
+                              >
+                                {page}
+                              </Button>
+                            )
+                          } else if (page === currentPage - 2 || page === currentPage + 2) {
+                            return <span key={page} className="px-1 text-gray-400">...</span>
+                          }
+                          return null
+                        })}
+                      </div>
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.min(Math.ceil(searchResults.length / memoriesPerPage), prev + 1))}
+                        disabled={currentPage === Math.ceil(searchResults.length / memoriesPerPage)}
+                        className="flex items-center gap-1"
+                      >
+                        <span className="hidden sm:inline">Next</span>
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
             
             {/* No Results */}

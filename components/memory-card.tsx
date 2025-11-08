@@ -172,7 +172,7 @@ export function MemoryCard({ memory, onUpdate }: MemoryCardProps) {
                   e.stopPropagation()
                   setCardImageIndex((prev) => (prev - 1 + displayImages.length) % displayImages.length)
                 }}
-                className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition-all z-20 opacity-0 group-hover:opacity-100"
+                className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white w-8 h-8 rounded-full transition-all z-20 opacity-0 group-hover:opacity-100 flex items-center justify-center"
                 aria-label="Previous image"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -182,7 +182,7 @@ export function MemoryCard({ memory, onUpdate }: MemoryCardProps) {
                   e.stopPropagation()
                   setCardImageIndex((prev) => (prev + 1) % displayImages.length)
                 }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition-all z-20 opacity-0 group-hover:opacity-100"
+                className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white w-8 h-8 rounded-full transition-all z-20 opacity-0 group-hover:opacity-100 flex items-center justify-center"
                 aria-label="Next image"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -204,7 +204,7 @@ export function MemoryCard({ memory, onUpdate }: MemoryCardProps) {
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all duration-300 flex items-center justify-center">
             <Button
               onClick={() => setIsModalOpen(true)}
-              className="opacity-100 transform scale-100 transition-all duration-300 bg-primary hover:bg-primary/90 text-white font-medium px-6 py-2 rounded-lg shadow-lg"
+              className="opacity-0 group-hover:opacity-100 transform scale-95 group-hover:scale-100 transition-all duration-300 bg-primary hover:bg-primary/90 text-white font-medium px-6 py-2 rounded-lg shadow-lg"
             >
               View Details
             </Button>
@@ -399,18 +399,20 @@ export function MemoryCard({ memory, onUpdate }: MemoryCardProps) {
                       e.stopPropagation()
                       setCurrentImageIndex((prev) => (prev - 1 + displayImages.length) % displayImages.length)
                     }}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors"
+                    className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white w-12 h-12 rounded-full transition-all z-10 flex items-center justify-center shadow-lg"
+                    aria-label="Previous image"
                   >
-                    ←
+                    <ChevronLeft className="w-5 h-5" />
                   </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
                       setCurrentImageIndex((prev) => (prev + 1) % displayImages.length)
                     }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors"
+                    className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white w-12 h-12 rounded-full transition-all z-10 flex items-center justify-center shadow-lg"
+                    aria-label="Next image"
                   >
-                    →
+                    <ChevronRight className="w-5 h-5" />
                   </button>
                   <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/70 backdrop-blur-sm px-3 py-1 rounded-full text-sm text-white">
                     {currentImageIndex + 1} / {displayImages.length}

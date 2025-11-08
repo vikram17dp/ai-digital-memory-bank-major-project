@@ -79,7 +79,12 @@ export function ProfileContent() {
     const fetchProfileData = async () => {
       try {
         setLoading(true)
-        const response = await fetch("/api/user/profile")
+        const response = await fetch("/api/user/profile", {
+          headers: {
+            'x-user-id': user?.id || '',
+            'x-user-email': user?.emailAddresses?.[0]?.emailAddress || '',
+          },
+        })
         const data = await response.json()
 
         if (data.success) {
@@ -168,6 +173,7 @@ export function ProfileContent() {
       const formData = new FormData()
       formData.append("file", file)
       formData.append("type", type)
+      formData.append("userId", user?.id || "")
 
       const response = await fetch("/api/user/upload-image", {
         method: "POST",
@@ -237,7 +243,11 @@ export function ProfileContent() {
       setSaving(true)
       const response = await fetch("/api/user/profile", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          'x-user-id': user?.id || '',
+          'x-user-email': user?.emailAddresses?.[0]?.emailAddress || '',
+        },
         body: JSON.stringify({
           email: user.emailAddresses?.[0]?.emailAddress,
           ...formData,

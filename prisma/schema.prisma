@@ -3,13 +3,12 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
 }
 
 model Memory {
-  id          String   @id @default(cuid())
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
   userId      String
   title       String?
   content     String
@@ -21,15 +20,17 @@ model Memory {
   imageUrl    String?
   images      String[]
   sentiment   String   @default("neutral")
+  embedding   String?
+  pineconeId  String?
   isPrivate   Boolean  @default(false)
   isFavorite  Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId])
   @@index([userId, mood])
   @@index([userId, isFavorite])
-  @@map("Memory")
+  @@map("memories")
 }
 
 enum Mood {
@@ -39,7 +40,7 @@ enum Mood {
 }
 
 model UserProfile {
-  id              String   @id @default(cuid())
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
   userId          String   @unique
   email           String   @unique
   bio             String?
@@ -52,5 +53,5 @@ model UserProfile {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  @@map("UserProfile")
+  @@map("userProfiles")
 }
