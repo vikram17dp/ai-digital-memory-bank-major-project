@@ -40,7 +40,17 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <ClerkProvider>
+    <ClerkProvider
+      appearance={{
+        variables: {
+          colorPrimary: "#8B5CF6",
+        },
+        elements: {
+          headerTitle:
+            "bg-gradient-to-r from-violet-500 via-fuchsia-500 to-sky-500 bg-clip-text text-transparent font-semibold",
+        },
+      }}
+    >
       <html lang="en" className={`${montserrat.variable} ${openSans.variable}`} suppressHydrationWarning>
         <body className="font-montserrat antialiased">
           <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
